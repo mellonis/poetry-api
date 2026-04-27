@@ -215,7 +215,7 @@ describe('PUT /comments/:id/vote', () => {
 		const response = await app.inject({
 			method: 'PUT',
 			url: '/comments/10/vote',
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 		expect(response.statusCode).toBe(401);
 	});
@@ -227,7 +227,7 @@ describe('PUT /comments/:id/vote', () => {
 			method: 'PUT',
 			url: '/comments/10/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 		expect(response.statusCode).toBe(403);
 	});
@@ -240,7 +240,7 @@ describe('PUT /comments/:id/vote', () => {
 			method: 'PUT',
 			url: '/comments/10/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 		expect(response.statusCode).toBe(404);
 	});
@@ -253,7 +253,7 @@ describe('PUT /comments/:id/vote', () => {
 			method: 'PUT',
 			url: '/comments/10/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 		expect(response.statusCode).toBe(409);
 	});

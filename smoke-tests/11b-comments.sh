@@ -20,10 +20,10 @@ if [ -n "$ACCESS_TOKEN" ]; then
 
     if [ -n "$GUESTBOOK_COMMENT_ID" ]; then
         # Vote on own comment (self-vote allowed by design)
-        parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}/vote" "{\"vote\":1}" "$ACCESS_TOKEN")"
-        assert_status "PUT /comments/:id/vote (+1)" 200 "$RESPONSE_STATUS"
+        parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}/vote" "{\"vote\":\"like\"}" "$ACCESS_TOKEN")"
+        assert_status "PUT /comments/:id/vote (like)" 200 "$RESPONSE_STATUS"
 
-        parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}/vote" "{\"vote\":0}" "$ACCESS_TOKEN")"
+        parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}/vote" "{\"vote\":null}" "$ACCESS_TOKEN")"
         assert_status "PUT /comments/:id/vote (remove)" 200 "$RESPONSE_STATUS"
 
         # Edit within window

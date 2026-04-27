@@ -1,6 +1,7 @@
 import type { MySQLPromisePool, MySQLRowDataPacket, MySQLResultSetHeader } from '@fastify/mysql';
 import { withConnection } from '../../lib/databaseHelpers.js';
 import { isBanned } from '../auth/rights.js';
+import { dbToVoteValue, type VoteValue } from '../../lib/voteValue.js';
 import {
 	topLevelCommentsQuery,
 	repliesByParentIdsQuery,
@@ -69,7 +70,7 @@ const projectRow = (row: RawCommentRow): CommentBase => {
 			likes: isVisible ? toInt(row.likes) : 0,
 			dislikes: isVisible ? toInt(row.dislikes) : 0,
 		},
-		userVote: isVisible ? toInt(row.userVote) as -1 | 0 | 1 : 0,
+		userVote: isVisible ? dbToVoteValue(toInt(row.userVote)) : null,
 	};
 };
 
@@ -322,14 +323,14 @@ export const getCommentVoteSummary = async (
 	mysql: MySQLPromisePool,
 	commentId: number,
 	userId: number,
-): Promise<CommentVoteCounts & { userVote: -1 | 0 | 1 }> =>
+): Promise<CommentVoteCounts & { userVote: VoteValue }> =>
 	withConnection(mysql, async (connection) => {
 		const [counts] = await connection.query<MySQLRowDataPacket[]>(commentVoteCountsQuery, [commentId]);
 		const [own] = await connection.query<MySQLRowDataPacket[]>(userCommentVoteQuery, [commentId, userId]);
 		return {
 			likes: toInt(counts[0]?.likes as number | string ?? 0),
 			dislikes: toInt(counts[0]?.dislikes as number | string ?? 0),
-			userVote: (own[0]?.vote ?? 0) as -1 | 0 | 1,
+			userVote: dbToVoteValue(own[0]?.vote as number | undefined),
 		};
 	});
 

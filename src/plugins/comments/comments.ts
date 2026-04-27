@@ -3,6 +3,7 @@ import { errorResponse } from '../../lib/schemas.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import { sendEmail } from '../../lib/email.js';
 import { commentReportedEmail, commentReplyEmail } from '../../lib/emailTemplates.js';
+import { voteValueToDb } from '../../lib/voteValue.js';
 import { sanitizeCommentText } from './sanitizeCommentText.js';
 import {
 	listComments,
@@ -268,7 +269,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 
 	fastify.put('/:commentId/vote', {
 		schema: {
-			description: 'Vote on a comment: +1 like, -1 dislike, 0 to remove your vote.',
+			description: 'Vote on a comment: "like", "dislike", or null to remove the vote.',
 			tags: ['Comments'],
 			params: commentParams,
 			body: voteCommentRequest,
@@ -292,11 +293,12 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			if (!meta) return reply.code(404).send(errorBody('not_found'));
 			if (meta.statusId !== COMMENT_STATUS.visible) return reply.code(409).send(errorBody('not_votable'));
 
-			if (vote === 0) {
+			const dbVote = voteValueToDb(vote);
+			if (dbVote === 0) {
 				await deleteCommentVote(fastify.mysql, commentId, userId);
 				request.log.info({ commentId, userId }, 'Comment vote removed');
 			} else {
-				await upsertCommentVote(fastify.mysql, commentId, userId, vote as 1 | -1);
+				await upsertCommentVote(fastify.mysql, commentId, userId, dbVote);
 				request.log.info({ commentId, userId, vote }, 'Comment vote recorded');
 			}
 

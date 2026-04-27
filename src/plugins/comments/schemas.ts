@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { voteValueSchema } from '../../lib/voteValue.js';
 import { COMMENT_MAX_LENGTH, COMMENT_MIN_LENGTH } from './sanitizeCommentText.js';
 
 export const COMMENT_STATUS = {
@@ -29,7 +30,7 @@ const commentBaseSchema = z.object({
 	createdAt: z.string(),
 	updatedAt: z.string(),
 	votes: commentVotes,
-	userVote: z.optional(z.number().int().min(-1).max(1)),
+	userVote: z.optional(voteValueSchema),
 });
 
 const commentWithRepliesSchema = commentBaseSchema.extend({
@@ -60,11 +61,11 @@ const updateCommentRequest = z.object({
 });
 
 const voteCommentRequest = z.object({
-	vote: z.number().int().min(-1).max(1),
+	vote: voteValueSchema,
 });
 
 const voteCommentResponse = commentVotes.extend({
-	userVote: z.number().int().min(-1).max(1),
+	userVote: voteValueSchema,
 });
 
 const reportCommentRequest = z.object({
