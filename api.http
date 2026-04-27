@@ -369,3 +369,110 @@ Authorization: Bearer {{login.response.body.accessToken}}
 {
   "vote": 0
 }
+
+### ---- Comments ----
+
+### List comments for a thing (public; auth optional for userVote)
+GET {{host}}/comments?thingId=1&limit=20
+
+### List guestbook (site-wide) comments
+GET {{host}}/comments?scope=site&limit=20
+
+### Get a single comment
+GET {{host}}/comments/1
+
+### Post a comment on a thing (requires auth + canComment)
+# @name newComment
+POST {{host}}/comments
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "thingId": 1,
+  "text": "Nice poem!"
+}
+
+### Post a guestbook entry
+POST {{host}}/comments
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "text": "Hello, this is a guestbook entry."
+}
+
+### Reply to a comment (parentId; thingId is inherited from parent)
+POST {{host}}/comments
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "parentId": {{newComment.response.body.id}},
+  "text": "Replying to the parent."
+}
+
+### Edit own comment (within 15 min of creation)
+PUT {{host}}/comments/{{newComment.response.body.id}}
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "text": "Edited comment text."
+}
+
+### Like a comment (+1)
+PUT {{host}}/comments/{{newComment.response.body.id}}/vote
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "vote": 1
+}
+
+### Dislike (-1) / remove vote (0)
+PUT {{host}}/comments/{{newComment.response.body.id}}/vote
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "vote": 0
+}
+
+### Report a comment
+POST {{host}}/comments/{{newComment.response.body.id}}/report
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.accessToken}}
+
+{
+  "reason": "Off-topic"
+}
+
+### Delete own comment (status -> Deleted)
+DELETE {{host}}/comments/{{newComment.response.body.id}}
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### ---- CMS: Comment Moderation ----
+
+### Moderation feed (requires editor + canEditContent)
+GET {{host}}/cms/comments?status=visible&limit=20
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Reported comments (sorted by report count)
+GET {{host}}/cms/comments?status=reported&limit=20
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Hide a comment (mod action; status -> Hidden, resolves open reports)
+POST {{host}}/cms/comments/1/hide
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Soft-delete a comment as a mod (status -> Deleted)
+POST {{host}}/cms/comments/1/delete
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Restore a hidden/deleted comment back to Visible
+POST {{host}}/cms/comments/1/restore
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Hard-delete a comment row (cascades replies/votes/reports)
+DELETE {{host}}/cms/comments/1
+Authorization: Bearer {{login.response.body.accessToken}}

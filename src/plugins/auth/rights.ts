@@ -3,12 +3,14 @@ const RIGHT_BITS = {
 	passwordResetRequested: 1,
 	banned: 2,
 	canVote: 3,
+	canComment: 4,
 	canEditContent: 12,
 	canEditUsers: 14,
 } as const;
 
 export interface ResolvedRights {
 	canVote: boolean;
+	canComment: boolean;
 	canEditContent: boolean;
 	canEditUsers: boolean;
 }
@@ -40,6 +42,7 @@ export const resolveRights = (userRights: number, groupRights: number): Resolved
 
 	return {
 		canVote: resolveBit(g, u, RIGHT_BITS.canVote),
+		canComment: resolveBit(g, u, RIGHT_BITS.canComment),
 		canEditContent: resolveBit(g, u, RIGHT_BITS.canEditContent),
 		canEditUsers: resolveBit(g, u, RIGHT_BITS.canEditUsers),
 	};

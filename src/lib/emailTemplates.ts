@@ -108,6 +108,40 @@ export const accountDeletedEmail = (login: string): EmailMessage => ({
 	html: `<p>Пользователь <strong>${login}</strong> удалил аккаунт.</p>`,
 });
 
+const escapeHtml = (s: string): string =>
+	s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+export const commentReportedEmail = (
+	reporterLogin: string,
+	commentId: number,
+	reason: string | null,
+): EmailMessage => ({
+	subject: `Жалоба на комментарий #${commentId}`,
+	html: `<p><strong>${reporterLogin}</strong> пожаловался(ась) на комментарий #${commentId}.</p>${
+		reason ? `<p>Причина: <em>${escapeHtml(reason)}</em></p>` : ''
+	}`,
+});
+
+export const commentReplyEmail = (
+	siteOrigin: string,
+	recipientLogin: string,
+	replierLogin: string,
+	replyText: string,
+	threadHref: string,
+): EmailMessage => ({
+	subject: `${replierLogin} ответил(а) на ваш комментарий`,
+	html: layout(siteOrigin, recipientLogin, `<p style="color:#333;font-size:14px;"><strong>${replierLogin}</strong> ответил(а) на ваш комментарий:</p>
+<blockquote style="margin:15px 0;padding:10px 15px;background:#f7f7f7;
+border-left:3px solid #999;color:#333;font-size:14px;
+white-space:pre-wrap;">${escapeHtml(replyText)}</blockquote>
+<p style="text-align:center;margin:25px 0;">
+<a href="${threadHref}" style="display:inline-block;background:#333;color:#fff;
+padding:12px 30px;border-radius:5px;text-decoration:none;font-size:14px;">
+Перейти к обсуждению</a></p>
+<p style="color:#999;font-size:12px;">Или скопируйте ссылку:
+<a href="${threadHref}" style="color:#666;">${threadHref}</a></p>`),
+});
+
 export const passwordChangedEmail = (siteOrigin: string, login: string, resetHref: string): EmailMessage => ({
 	subject: 'Пароль изменён',
 	html: layout(siteOrigin, login, `<p style="color:#333;font-size:14px;">Пароль для вашего

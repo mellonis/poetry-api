@@ -7,6 +7,7 @@ const loginSchema = z.string()
 
 export const resolvedRightsSchema = z.object({
 	canVote: z.boolean(),
+	canComment: z.boolean(),
 	canEditContent: z.boolean(),
 	canEditUsers: z.boolean(),
 });

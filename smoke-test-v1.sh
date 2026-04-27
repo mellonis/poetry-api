@@ -131,7 +131,14 @@ bold "3. Search"
 check "GET /search?q=test (no Meilisearch)" GET "/search?q=test" 503
 
 bold ""
-bold "4. Swagger docs"
+bold "4. Comments (public reads)"
+
+check "GET /comments?scope=site" GET "/comments?scope=site" 200
+check "GET /comments?thingId=1" GET "/comments?thingId=1" 200
+check "GET /comments?thingId=1&scope=site (rejected)" GET "/comments?thingId=1&scope=site" 400
+
+bold ""
+bold "5. Swagger docs"
 
 check "GET /docs" GET "/docs" 200
 
