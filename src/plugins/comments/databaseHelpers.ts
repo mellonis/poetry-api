@@ -115,9 +115,12 @@ export const listComments = async (
 
 		const topIds = keptTop.map((r) => r.id);
 
+		// Two `?` in this query: the userId in the userVote SUM (inherited from
+		// commentRowFields) and the IN-list for parent ids. mysql2 expands an
+		// array argument to a comma-separated value list for IN (?).
 		const [replyRows] = await connection.query<MySQLRowDataPacket[]>(
 			repliesByParentIdsQuery,
-			[topIds],
+			[userId, topIds],
 		);
 
 		const repliesByParent = new Map<number, CommentBase[]>();
