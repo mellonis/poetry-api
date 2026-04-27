@@ -44,11 +44,13 @@ export const repliesByParentIdsQuery = `
   ORDER BY c.parent_id, c.created_at ASC, c.id ASC
 `;
 
+// Total visible comments for the "Комментарии (N)" header — counts both
+// top-level rows and replies. Pagination's hasMore is computed separately
+// from the items.length === limit check, so the two can diverge cleanly.
 export const topLevelCommentCountQuery = `
   SELECT COUNT(*) AS total
   FROM comment
-  WHERE parent_id IS NULL
-    AND r_thing_id <=> ?
+  WHERE r_thing_id <=> ?
     AND r_comment_status_id = 1
 `;
 
