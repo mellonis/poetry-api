@@ -46,7 +46,15 @@ fastify.register(cors, {
 // Global rate limit is opt-in per route via `config: { rateLimit }`.
 // Keyed by IP — the rate-limit hook runs before verifyJwt, so request.user
 // is not yet populated; auth-gated routes still get the auth check on top.
-fastify.register(rateLimit, { global: false });
+// errorResponseBuilder localizes the 429 body for our (Russian) clients.
+fastify.register(rateLimit, {
+	global: false,
+	errorResponseBuilder: (_req, ctx) => ({
+		statusCode: 429,
+		error: 'rate_limited',
+		message: `Слишком часто. Попробуйте через ${Math.ceil(ctx.ttl / 1000)} с.`,
+	}),
+});
 fastify.register(databasePlugin);
 fastify.register(searchPlugin);
 fastify.register(authPlugin);
