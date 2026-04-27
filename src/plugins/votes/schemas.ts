@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { voteValueSchema } from '../../lib/voteValue.js';
 
 export const voteParams = z.object({
 	thingId: z.coerce.number().int().positive(),
 });
 
 export const voteRequest = z.object({
-	vote: z.number().int().min(-1).max(1),
+	vote: voteValueSchema,
 });
 
 export const voteCountsResponse = z.object({

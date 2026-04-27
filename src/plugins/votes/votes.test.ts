@@ -52,7 +52,7 @@ describe('PUT /things/:thingId/vote', () => {
 		const response = await app.inject({
 			method: 'PUT',
 			url: '/things/1/vote',
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 
 		expect(response.statusCode).toBe(401);
@@ -66,7 +66,7 @@ describe('PUT /things/:thingId/vote', () => {
 			method: 'PUT',
 			url: '/things/1/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 
 		expect(response.statusCode).toBe(403);
@@ -80,7 +80,7 @@ describe('PUT /things/:thingId/vote', () => {
 			method: 'PUT',
 			url: '/things/1/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 1 },
+			payload: { vote: 'like' },
 		});
 
 		expect(response.statusCode).toBe(200);
@@ -95,13 +95,13 @@ describe('PUT /things/:thingId/vote', () => {
 			method: 'PUT',
 			url: '/things/1/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 5 },
+			payload: { vote: 'shrug' as unknown as 'like' },
 		});
 
 		expect(response.statusCode).toBe(400);
 	});
 
-	it('removes vote when vote is 0 and returns updated counts', async () => {
+	it('removes vote when vote is null and returns updated counts', async () => {
 		const app = await buildApp(createMockMysql([], [{ plus: 2, minus: 0 }]));
 		const token = await getToken();
 
@@ -109,7 +109,7 @@ describe('PUT /things/:thingId/vote', () => {
 			method: 'PUT',
 			url: '/things/1/vote',
 			headers: { authorization: `Bearer ${token}` },
-			payload: { vote: 0 },
+			payload: { vote: null },
 		});
 
 		expect(response.statusCode).toBe(200);

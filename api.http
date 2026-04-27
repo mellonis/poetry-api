@@ -358,16 +358,16 @@ Content-Type: application/json
 Authorization: Bearer {{login.response.body.accessToken}}
 
 {
-  "vote": 1
+  "vote": "like"
 }
 
-### Remove a vote (vote: 0, requires auth + canVote)
+### Remove a vote (vote: null, requires auth + canVote)
 PUT {{host}}/things/1/vote
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.accessToken}}
 
 {
-  "vote": 0
+  "vote": null
 }
 
 ### ---- Comments ----
@@ -420,22 +420,22 @@ Authorization: Bearer {{login.response.body.accessToken}}
   "text": "Edited comment text."
 }
 
-### Like a comment (+1)
+### Like a comment
 PUT {{host}}/comments/{{newComment.response.body.id}}/vote
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.accessToken}}
 
 {
-  "vote": 1
+  "vote": "like"
 }
 
-### Dislike (-1) / remove vote (0)
+### Remove vote (null) — or send "dislike" to flip
 PUT {{host}}/comments/{{newComment.response.body.id}}/vote
 Content-Type: application/json
 Authorization: Bearer {{login.response.body.accessToken}}
 
 {
-  "vote": 0
+  "vote": null
 }
 
 ### Report a comment
