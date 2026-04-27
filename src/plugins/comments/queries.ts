@@ -176,6 +176,8 @@ const cmsCommentRowFields = `
   c.id,
   c.parent_id AS parentId,
   c.r_thing_id AS thingId,
+  t.title AS thingTitle,
+  t.first_lines AS thingFirstLines,
   c.r_user_id AS userId,
   u.login AS authorLogin,
   c.text,
@@ -212,6 +214,7 @@ export const buildCmsCommentListQuery = (filters: {
     FROM comment c
     LEFT JOIN auth_user u ON u.id = c.r_user_id
     LEFT JOIN comment_vote cv ON cv.r_comment_id = c.id
+    LEFT JOIN thing t ON t.id = c.r_thing_id
     ${where}
     GROUP BY c.id
     ORDER BY reportCount DESC, c.created_at DESC, c.id DESC
