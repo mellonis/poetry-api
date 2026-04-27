@@ -85,6 +85,8 @@ const cmsCommentRow = commentBaseSchema.extend({
 	reportCount: z.number().int().min(0),
 	statusChangedAt: z.string(),
 	statusChangedByUserId: z.number().int().positive().nullable(),
+	thingTitle: z.string().nullable(),
+	thingFirstLines: z.string().nullable(),
 });
 
 const cmsCommentListResponse = z.object({
