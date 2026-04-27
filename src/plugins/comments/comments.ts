@@ -47,6 +47,7 @@ const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
 const POST_RATE_LIMIT = { max: 1, timeWindow: '30 seconds' };
+const EDIT_RATE_LIMIT = { max: 10, timeWindow: '1 minute' };
 const VOTE_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
 const REPORT_RATE_LIMIT = { max: 1, timeWindow: '5 minutes' };
 
@@ -212,6 +213,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 				500: errorResponse,
 			},
 		},
+		config: { rateLimit: EDIT_RATE_LIMIT },
 		preHandler: fastify.verifyJwt,
 		handler: async (request: FastifyRequest<{ Params: CommentParams; Body: UpdateCommentRequest }>, reply) => {
 			const userId = request.user!.sub;
