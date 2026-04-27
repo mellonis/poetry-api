@@ -43,7 +43,7 @@ SMTP_FROM_NAME=Система оповещений        # required, display na
 SMTP_FROM_ADDRESS=notifier@mellonis.ru   # required, email address for From header (no fallback to SMTP_LOGIN — would leak credentials)
 ALLOWED_ORIGINS=https://poetry.mellonis.ru,https://old2.poetry.mellonis.ru  # required, comma-separated whitelist of client origins (CORS + email links)
 WEBAUTHN_RP_ID=poetry.mellonis.ru       # optional, WebAuthn Relying Party ID (default: poetry.mellonis.ru, use "localhost" for local dev)
-ADMIN_NOTIFY_EMAIL=admin@mellonis.ru  # optional, receives notifications on votes, registrations, account deletions
+ADMIN_NOTIFY_EMAIL=admin@mellonis.ru  # optional, receives notifications on votes, registrations, account deletions, comment reports
 MEILI_URL=http://poetry-meilisearch:7700  # optional, Meilisearch host (default: http://poetry-meilisearch:7700)
 MEILI_MASTER_KEY=<key>               # optional (required for search to work), shared with Meilisearch container
 ```
@@ -73,6 +73,14 @@ Fastify app using a plugin-based structure under `src/plugins/`:
   - Returns updated `{ plus, minus }` counts
   - Sends `ADMIN_NOTIFY_EMAIL` on every vote action including removal (fire-and-forget, includes thing title)
 - **`author/`** — routes prefixed `/author`. `GET /` returns author biography text, date, and optional SEO fields. Sourced from `news` table (id=1). No auth required
+- **`comments/`** — routes prefixed `/comments`. Unified site-wide guestbook + per-thing comments in one table; `r_thing_id IS NULL` rows are guestbook entries. One-level threading (a reply's parent must itself be top-level). Post-moderation: new comments default to `Visible` (status 1). Status set: 1=Visible, 2=Hidden (mod-removed), 3=Deleted (self- or admin-removed)
+  - Public: `GET /` (paginated by top-level + replies inline; `optionalVerifyJwt` enriches rows with `userVote`), `GET /:commentId` (top-level rows return `replies: []` bundled in for single-thread view; reply rows are returned bare since one-level threading bounds depth), `POST /` (auth + `canComment` bit 4 + rate-limit 1/30s; reply path also fires `commentReplyEmail` to the parent author when the parent is a different, non-banned user), `PUT /:commentId` (own + 15-min edit window), `DELETE /:commentId` (own → status=Deleted), `PUT /:commentId/vote` (auth + `canVote` + rate-limit 5/min, mirrors `vote` table semantics with -1/0/+1; self-vote allowed), `POST /:commentId/report` (auth + rate-limit 1/5min, sends `ADMIN_NOTIFY_EMAIL`)
+  - Pagination: top-level only, replies always bundled with their parent — keeps trees coherent under append-style "Show more"
+  - Tombstones: removed comments are returned only when they have at least one direct visible child (one-level threading bounds the check); text/author/votes are masked client-side via `text=null`, `authorLogin=null`. Replies in non-Visible state are omitted entirely
+  - Sanitization: `sanitizeCommentText.ts` (NFC normalize → CRLF→LF → strip control chars → collapse blank-line runs → trim → length 2–4000 → flood reject). Plain-text only; renderers must escape on output
+  - Reply notification: deep-link URL points to the parent (top-level), since pagination is on top-level. Shape: `<origin>/sections/<sectionIdentifier>/<positionInSection>?thread=<parentId>` for thing comments, `<origin>/guestbook?thread=<parentId>` for guestbook (no trailing slash before `?` — nextjs convention). Single-thread mode is drift-proof — the link still works regardless of how many comments accumulate later. Frontend reads `?thread=…` and renders only that top-level + its replies via `GET /comments/:id`
+  - Moderation routes live in `cms/commentsCmsRoutes.ts` (registered by `cmsPlugin`, gated by editor + `canEditContent`): `GET /cms/comments`, `POST /cms/comments/:id/{hide,delete,restore}`, `DELETE /cms/comments/:id` (hard delete). Hide/delete on a comment auto-resolves any open `comment_report` rows for it
+- **`@fastify/rate-limit`** — registered globally with `global: false`; routes opt in via `config: { rateLimit: { max, timeWindow } }`. In-memory store (no Redis), keyed by IP (the rate-limit hook runs before `verifyJwt`)
 - **`search/`** — Meilisearch integration. `search.ts` is a `fastify-plugin` that decorates `fastify.meiliClient` (nullable — `null` when `MEILI_MASTER_KEY` is not set). `searchRoutes.ts` provides public `GET /search?q=&limit=&offset=` (always filters `statusId=2`). `searchSync.ts` has `syncThingToSearch` / `deleteThingFromSearch` / `reindexAll`. `textStripping.ts` strips BBCode tags and `{note}` markers for indexing. CMS thing mutations fire-and-forget sync to Meilisearch after DB write. **Index versioning:** `INDEX_VERSION` constant in `search.ts` tracks the indexing schema version. On startup, the plugin compares it against the version stored in a `_meta` Meilisearch index. If they differ, a full reindex runs automatically. Bump `INDEX_VERSION` when changing stripping logic, indexed fields, or document shape.
 - **`cms/`** — routes prefixed `/cms`. Two-layer auth: all routes require `verifyJwt` + editor role (`isEditor`); mutations require `canEditContent` right (bit 12). Shared hook in `hooks.ts`. Sub-plugins:
   - `authorRoutes.ts` — GET + PUT `/cms/author` for about page editing
@@ -109,6 +117,8 @@ Shared utilities in `src/lib/`:
   | `thingVotedEmail` | `ADMIN_NOTIFY_EMAIL` | vote cast/removed |
   | `accountRegisteredEmail` | `ADMIN_NOTIFY_EMAIL` | new user registered |
   | `accountDeletedEmail` | `ADMIN_NOTIFY_EMAIL` | user deleted account |
+  | `commentReportedEmail` | `ADMIN_NOTIFY_EMAIL` | user reported a comment |
+  | `commentReplyEmail` | parent comment author | someone replied to their comment (skipped on self-reply, deleted author, banned) |
 - `maskEmail.ts` — masks emails for logging
 - `authNotifier/` — `AuthNotifier` interface, `EmailAuthNotifier` (production), `ConsoleAuthNotifier` (dev)
 

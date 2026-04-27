@@ -63,7 +63,7 @@ const getEditorToken = async (canEditContent = true) =>
 		isAdmin: false,
 		isEditor: true,
 		tokenVersion: 0,
-		rights: { canVote: true, canEditContent, canEditUsers: false },
+		rights: { canVote: true, canComment: true, canEditContent, canEditUsers: false },
 	}, secret);
 
 const getNonEditorToken = async () =>
@@ -73,7 +73,7 @@ const getNonEditorToken = async () =>
 		isAdmin: false,
 		isEditor: false,
 		tokenVersion: 0,
-		rights: { canVote: true, canEditContent: false, canEditUsers: false },
+		rights: { canVote: true, canComment: true, canEditContent: false, canEditUsers: false },
 	}, secret);
 
 const getAdminToken = async (canEditUsers = true) =>
@@ -83,7 +83,7 @@ const getAdminToken = async (canEditUsers = true) =>
 		isAdmin: true,
 		isEditor: true,
 		tokenVersion: 0,
-		rights: { canVote: true, canEditContent: true, canEditUsers },
+		rights: { canVote: true, canComment: true, canEditContent: true, canEditUsers },
 	}, secret);
 
 const sectionRow = {

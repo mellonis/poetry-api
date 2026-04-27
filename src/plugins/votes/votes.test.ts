@@ -43,7 +43,7 @@ async function buildApp(mysql: MySQLPromisePool) {
 }
 
 const getToken = async (canVote = true) =>
-	signAccessToken({ sub: 1, login: 'testuser', isAdmin: false, isEditor: false, tokenVersion: 0, rights: { canVote, canEditContent: false, canEditUsers: false } }, secret);
+	signAccessToken({ sub: 1, login: 'testuser', isAdmin: false, isEditor: false, tokenVersion: 0, rights: { canVote, canComment: true, canEditContent: false, canEditUsers: false } }, secret);
 
 describe('PUT /things/:thingId/vote', () => {
 	it('returns 401 without auth token', async () => {

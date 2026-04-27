@@ -80,7 +80,7 @@ describe('POST /auth/login', () => {
 		expect(body.refreshToken).toBeDefined();
 		expect(body.user.id).toBe(1);
 		expect(body.user.login).toBe('testuser');
-		expect(body.user.rights).toEqual({ canVote: true, canEditContent: false, canEditUsers: false });
+		expect(body.user.rights).toEqual({ canVote: true, canComment: true, canEditContent: false, canEditUsers: false });
 	});
 
 	it('returns 401 for wrong password', async () => {

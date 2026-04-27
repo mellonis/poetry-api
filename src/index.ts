@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { sectionsPlugin } from './plugins/sections/sections.js';
 import { databasePlugin } from './plugins/database/database.js';
@@ -16,6 +17,7 @@ import { votesPlugin } from './plugins/votes/votes.js';
 import { bookmarksPlugin } from './plugins/bookmarks/bookmarks.js';
 import { authorPlugin } from './plugins/author/author.js';
 import { cmsPlugin } from './plugins/cms/cms.js';
+import { commentsPlugin } from './plugins/comments/comments.js';
 import searchPlugin from './plugins/search/search.js';
 import { searchRoutes } from './plugins/search/searchRoutes.js';
 
@@ -41,6 +43,10 @@ fastify.register(cors, {
 	allowedHeaders: ['Content-Type', 'Authorization'],
 	credentials: true,
 });
+// Global rate limit is opt-in per route via `config: { rateLimit }`.
+// Keyed by IP — the rate-limit hook runs before verifyJwt, so request.user
+// is not yet populated; auth-gated routes still get the auth check on top.
+fastify.register(rateLimit, { global: false });
 fastify.register(databasePlugin);
 fastify.register(searchPlugin);
 fastify.register(authPlugin);
@@ -55,6 +61,7 @@ fastify.register(votesPlugin, { prefix: '/things' });
 fastify.register(bookmarksPlugin, { prefix: '/bookmarks' });
 fastify.register(authorPlugin, { prefix: '/author' });
 fastify.register(cmsPlugin, { prefix: '/cms' });
+fastify.register(commentsPlugin, { prefix: '/comments' });
 fastify.register(searchRoutes, { prefix: '/search' });
 
 async function main() {

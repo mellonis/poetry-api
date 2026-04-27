@@ -12,23 +12,31 @@ import {
 describe('resolveRights', () => {
 	// Bits 3..10 rule: (!group) && user
 	it('canVote: false when neither side has bit 3', () => {
-		expect(resolveRights(0, 0)).toEqual({ canVote: false, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(0, 0)).toEqual({ canVote: false, canComment: false, canEditContent: false, canEditUsers: false });
 	});
 
 	it('canVote: true when user opts in (group has no bit 3)', () => {
-		expect(resolveRights(8, 0)).toEqual({ canVote: true, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(8, 0)).toEqual({ canVote: true, canComment: false, canEditContent: false, canEditUsers: false });
 	});
 
 	it('canVote: false when group blocks (group has bit 3, user does not)', () => {
-		expect(resolveRights(0, 8)).toEqual({ canVote: false, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(0, 8)).toEqual({ canVote: false, canComment: false, canEditContent: false, canEditUsers: false });
 	});
 
 	it('canVote: false when group blocks (both sides have bit 3)', () => {
-		expect(resolveRights(8, 8)).toEqual({ canVote: false, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(8, 8)).toEqual({ canVote: false, canComment: false, canEditContent: false, canEditUsers: false });
 	});
 
 	it('resolves default new user rights (24 = can_vote + can_comment)', () => {
-		expect(resolveRights(24, 0)).toEqual({ canVote: true, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(24, 0)).toEqual({ canVote: true, canComment: true, canEditContent: false, canEditUsers: false });
+	});
+
+	it('canComment: true when user opts in (group has no bit 4)', () => {
+		expect(resolveRights(16, 0).canComment).toBe(true);
+	});
+
+	it('canComment: false when group blocks (group has bit 4)', () => {
+		expect(resolveRights(16, 16).canComment).toBe(false);
 	});
 
 	// Bits 11..15 rule: XOR (group default, user override)
@@ -65,11 +73,11 @@ describe('resolveRights', () => {
 
 	// Banned override
 	it('zeros all rights when user is banned (bit 2)', () => {
-		expect(resolveRights(8 | 4, 0)).toEqual({ canVote: false, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(8 | 4, 0)).toEqual({ canVote: false, canComment: false, canEditContent: false, canEditUsers: false });
 	});
 
 	it('zeros all rights when group is banned (bit 2)', () => {
-		expect(resolveRights(8, 4)).toEqual({ canVote: false, canEditContent: false, canEditUsers: false });
+		expect(resolveRights(8, 4)).toEqual({ canVote: false, canComment: false, canEditContent: false, canEditUsers: false });
 	});
 
 	it('zeros canEditContent when banned even if group has bit 12', () => {
