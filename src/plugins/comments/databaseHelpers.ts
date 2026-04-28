@@ -50,7 +50,7 @@ interface RawCommentRow {
 }
 
 const toIso = (d: Date | string): string => (d instanceof Date ? d.toISOString() : new Date(d).toISOString());
-const toInt = (v: number | string): number => (typeof v === 'string' ? parseInt(v, 10) : v);
+const toInt = (v: number | string): number => Number(v);
 
 // Tombstones (status 2/3): hide text, author and votes. Caller decides whether
 // to include them at all (by hasVisibleChild for top-level, never for replies).

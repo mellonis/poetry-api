@@ -162,7 +162,7 @@ describe('GET /sections', () => {
 	});
 });
 
-describe('GET /sections/:id', () => {
+describe('GET /sections/:identifier', () => {
 	it('returns 404 when section not found', async () => {
 		const app = buildApp(createMockMysql([]));
 		const response = await app.inject({ method: 'GET', url: '/sections/unknown' });

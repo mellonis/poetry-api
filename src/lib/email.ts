@@ -15,7 +15,7 @@ const getTransporter = (): Transporter => {
 
 		transporter = createTransport({
 			host,
-			port: parseInt(port, 10),
+			port: Number(port),
 			secure: false,
 			auth: { user, pass },
 		});

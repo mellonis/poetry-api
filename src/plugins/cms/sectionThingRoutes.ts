@@ -48,7 +48,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.get<{ Params: SectionIdParam }>('/sections/:id/things', {
+	fastify.get<{ Params: SectionIdParam }>('/sections/:sectionId/things', {
 		schema: {
 			description: 'List things in a section.',
 			tags: ['CMS'],
@@ -63,13 +63,13 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 		handler: async (request, reply) => {
 			try {
-				const section = await getCmsSectionById(fastify.mysql, request.params.id);
+				const section = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
 				if (!section) {
 					return reply.code(404).send({ error: 'Section not found' });
 				}
 
-				return await getCmsThingsInSection(fastify.mysql, request.params.id);
+				return await getCmsThingsInSection(fastify.mysql, request.params.sectionId);
 			} catch (error) {
 				request.log.error(error);
 				return reply.code(500).send({ error: 'Internal server error' });
@@ -77,7 +77,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.post<{ Params: SectionIdParam; Body: AddThingRequest }>('/sections/:id/things', {
+	fastify.post<{ Params: SectionIdParam; Body: AddThingRequest }>('/sections/:sectionId/things', {
 		onRequest: requireCanEditContent,
 		schema: {
 			description: 'Add a thing to a section.',
@@ -95,7 +95,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 		handler: async (request, reply) => {
 			try {
-				const section = await getCmsSectionById(fastify.mysql, request.params.id);
+				const section = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
 				if (!section) {
 					return reply.code(404).send({ error: 'Section not found' });
@@ -107,9 +107,9 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 					return reply.code(404).send({ error: 'Thing not found' });
 				}
 
-				await addThingToSection(fastify.mysql, request.params.id, request.body.thingId, request.body.position);
-				request.log.info({ sectionId: request.params.id, thingId: request.body.thingId }, 'Thing added to section');
-				const things = await getCmsThingsInSection(fastify.mysql, request.params.id);
+				await addThingToSection(fastify.mysql, request.params.sectionId, request.body.thingId, request.body.position);
+				request.log.info({ sectionId: request.params.sectionId, thingId: request.body.thingId }, 'Thing added to section');
+				const things = await getCmsThingsInSection(fastify.mysql, request.params.sectionId);
 				return reply.code(201).send(things);
 			} catch (error) {
 				if ((error as { code?: string }).code === 'ER_DUP_ENTRY') {
@@ -121,7 +121,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.delete<{ Params: ThingInSectionParams }>('/sections/:id/things/:thingId', {
+	fastify.delete<{ Params: ThingInSectionParams }>('/sections/:sectionId/things/:thingId', {
 		onRequest: requireCanEditContent,
 		schema: {
 			description: 'Remove a thing from a section.',
@@ -136,8 +136,8 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 		handler: async (request, reply) => {
 			try {
-				await removeThingFromSection(fastify.mysql, request.params.id, request.params.thingId);
-				request.log.info({ sectionId: request.params.id, thingId: request.params.thingId }, 'Thing removed from section');
+				await removeThingFromSection(fastify.mysql, request.params.sectionId, request.params.thingId);
+				request.log.info({ sectionId: request.params.sectionId, thingId: request.params.thingId }, 'Thing removed from section');
 				return reply.code(204).send();
 			} catch (error) {
 				request.log.error(error);
@@ -146,7 +146,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.put<{ Params: SectionIdParam; Body: ReorderThingsRequest }>('/sections/:id/things/reorder', {
+	fastify.put<{ Params: SectionIdParam; Body: ReorderThingsRequest }>('/sections/:sectionId/things/reorder', {
 		onRequest: requireCanEditContent,
 		schema: {
 			description: 'Reorder things within a section.',
@@ -164,13 +164,13 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 		},
 		handler: async (request, reply) => {
 			try {
-				const section = await getCmsSectionById(fastify.mysql, request.params.id);
+				const section = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
 				if (!section) {
 					return reply.code(404).send({ error: 'Section not found' });
 				}
 
-				const currentThingIds = await getSectionThingIds(fastify.mysql, request.params.id);
+				const currentThingIds = await getSectionThingIds(fastify.mysql, request.params.sectionId);
 				const requestedIds = new Set(request.body);
 				const currentIds = new Set(currentThingIds);
 
@@ -178,9 +178,9 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 					return reply.code(400).send({ error: 'Thing IDs must match the current set of things in the section' });
 				}
 
-				await reorderThingsInSection(fastify.mysql, request.params.id, request.body);
-				request.log.info({ sectionId: request.params.id, count: request.body.length }, 'Things reordered');
-				return await getCmsThingsInSection(fastify.mysql, request.params.id);
+				await reorderThingsInSection(fastify.mysql, request.params.sectionId, request.body);
+				request.log.info({ sectionId: request.params.sectionId, count: request.body.length }, 'Things reordered');
+				return await getCmsThingsInSection(fastify.mysql, request.params.sectionId);
 			} catch (error) {
 				request.log.error(error);
 				return reply.code(500).send({ error: 'Internal server error' });

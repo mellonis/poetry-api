@@ -58,7 +58,7 @@ export const createRefreshToken = async (
 	userId: number,
 	tokenHash: string,
 ): Promise<void> => {
-	const ttlInSeconds = parseInt(process.env.JWT_REFRESH_TOKEN_TTL!, 10);
+	const ttlInSeconds = Number(process.env.JWT_REFRESH_TOKEN_TTL);
 
 	await withConnection(mysql, async (connection) => {
 		await connection.query(insertRefreshTokenQuery, [userId, tokenHash, ttlInSeconds]);
@@ -110,10 +110,10 @@ export const generateVerificationKey = (): string => {
 
 // TTL env vars are validated at startup in auth.ts — safe to parse without checks here.
 export const isActivationKeyExpired = (key: string): boolean =>
-	isKeyOlderThan(key, parseInt(process.env.ACTIVATION_KEY_TTL!, 10));
+	isKeyOlderThan(key, Number(process.env.ACTIVATION_KEY_TTL));
 
 export const isResetKeyExpired = (key: string): boolean =>
-	isKeyOlderThan(key, parseInt(process.env.RESET_KEY_TTL!, 10));
+	isKeyOlderThan(key, Number(process.env.RESET_KEY_TTL));
 
 const isKeyOlderThan = (key: string, ttlInSeconds: number): boolean => {
 	const timestampHex = key.substring(0, KEY_TIMESTAMP_LENGTH);

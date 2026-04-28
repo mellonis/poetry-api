@@ -8,7 +8,7 @@ if [ "$RESPONSE_STATUS" -eq 200 ]; then
     USER_ID=$(echo "$RESPONSE_BODY" | grep -o '"id":[[:space:]]*[0-9]*' | head -1 | grep -o '[0-9]*')
 
     parse_response "$(request DELETE "/users/${USER_ID}" "{\"password\":\"${TEST_PASSWORD}\"}" "$ACCESS_TOKEN")"
-    assert_status "DELETE /users/:id (self-delete)" 204 "$RESPONSE_STATUS"
+    assert_status "DELETE /users/:userId (self-delete)" 204 "$RESPONSE_STATUS"
 
     parse_response "$(request POST /auth/login "{\"login\":\"${TEST_LOGIN}\",\"password\":\"${TEST_PASSWORD}\"}")"
     assert_status "POST /auth/login (after delete)" 401 "$RESPONSE_STATUS"

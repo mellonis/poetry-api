@@ -21,22 +21,22 @@ if [ -n "$ACCESS_TOKEN" ]; then
     if [ -n "$GUESTBOOK_COMMENT_ID" ]; then
         # Vote on own comment (self-vote allowed by design)
         parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}/vote" "{\"vote\":\"like\"}" "$ACCESS_TOKEN")"
-        assert_status "PUT /comments/:id/vote (like)" 200 "$RESPONSE_STATUS"
+        assert_status "PUT /comments/:commentId/vote (like)" 200 "$RESPONSE_STATUS"
 
         parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}/vote" "{\"vote\":null}" "$ACCESS_TOKEN")"
-        assert_status "PUT /comments/:id/vote (remove)" 200 "$RESPONSE_STATUS"
+        assert_status "PUT /comments/:commentId/vote (remove)" 200 "$RESPONSE_STATUS"
 
         # Edit within window
         parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}" "{\"text\":\"edited smoke test ${TIMESTAMP}\"}" "$ACCESS_TOKEN")"
-        assert_status "PUT /comments/:id (edit)" 200 "$RESPONSE_STATUS"
+        assert_status "PUT /comments/:commentId (edit)" 200 "$RESPONSE_STATUS"
 
         # Self-delete (sets status=Deleted)
         parse_response "$(request DELETE "/comments/${GUESTBOOK_COMMENT_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /comments/:id (self-delete)" 200 "$RESPONSE_STATUS"
+        assert_status "DELETE /comments/:commentId (self-delete)" 200 "$RESPONSE_STATUS"
 
         # Edit after delete should fail
         parse_response "$(request PUT "/comments/${GUESTBOOK_COMMENT_ID}" "{\"text\":\"too late\"}" "$ACCESS_TOKEN")"
-        assert_status "PUT /comments/:id (after delete)" 409 "$RESPONSE_STATUS"
+        assert_status "PUT /comments/:commentId (after delete)" 409 "$RESPONSE_STATUS"
     else
         red "  SKIP  Comment lifecycle (no comment id parsed)"
         FAIL=$((FAIL + 6))

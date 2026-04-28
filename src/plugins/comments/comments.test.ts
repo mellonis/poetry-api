@@ -123,7 +123,7 @@ describe('GET /comments', () => {
 	});
 });
 
-describe('GET /comments/:id', () => {
+describe('GET /comments/:commentId', () => {
 	it('bundles replies for a top-level comment (single-thread shape)', async () => {
 		const top = { ...visibleRow, parentId: null, hasVisibleChild: 1 };
 		const reply = { ...visibleRow, id: 11, parentId: 10, hasVisibleChild: 0 };
@@ -209,7 +209,7 @@ describe('POST /comments', () => {
 	});
 });
 
-describe('PUT /comments/:id/vote', () => {
+describe('PUT /comments/:commentId/vote', () => {
 	it('returns 401 without auth', async () => {
 		const app = await buildApp(createMockMysql());
 		const response = await app.inject({
@@ -259,7 +259,7 @@ describe('PUT /comments/:id/vote', () => {
 	});
 });
 
-describe('POST /comments/:id/report', () => {
+describe('POST /comments/:commentId/report', () => {
 	it('returns 401 without auth', async () => {
 		const app = await buildApp(createMockMysql());
 		const response = await app.inject({

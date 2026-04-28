@@ -104,7 +104,7 @@ fastify.register(searchRoutes, { prefix: '/search' });
 async function main() {
 	await fastify.listen({
 		host: '0.0.0.0',
-		port: process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
+		port: process.env.PORT ? Number(process.env.PORT) : 3000,
 	});
 }
 

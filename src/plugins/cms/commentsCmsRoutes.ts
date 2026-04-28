@@ -14,14 +14,12 @@ import {
 	cmsCommentListResponse,
 	okResponse,
 	COMMENT_STATUS,
+	DEFAULT_LIMIT,
+	MAX_LIMIT,
+	errorBody,
 	type CommentParams,
 	type CmsCommentListQuery,
 } from '../comments/schemas.js';
-
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 100;
-
-const errorBody = (code: string, message?: string) => ({ error: code, ...(message ? { message } : {}) });
 
 const STATUS_NAME_TO_ID: Record<string, number> = {
 	visible: COMMENT_STATUS.visible,

@@ -10,6 +10,12 @@ export const COMMENT_STATUS = {
 
 export const COMMENT_EDIT_WINDOW_MS = 15 * 60 * 1000;
 
+export const DEFAULT_LIMIT = 20;
+export const MAX_LIMIT = 100;
+
+export const errorBody = (code: string, message?: string) =>
+	({ error: code, ...(message ? { message } : {}) });
+
 const commentParams = z.object({
 	commentId: z.coerce.number().int().positive(),
 });

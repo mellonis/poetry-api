@@ -133,7 +133,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.put<{ Params: SectionIdParam; Body: UpdateSectionRequest }>('/sections/:id', {
+	fastify.put<{ Params: SectionIdParam; Body: UpdateSectionRequest }>('/sections/:sectionId', {
 		onRequest: requireCanEditContent,
 		schema: {
 			description: 'Update a section.',
@@ -151,7 +151,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 		},
 		handler: async (request, reply) => {
 			try {
-				const current = await getCmsSectionById(fastify.mysql, request.params.id);
+				const current = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
 				if (!current) {
 					return reply.code(404).send({ error: 'Section not found' });
@@ -160,16 +160,16 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 				const { redirectSectionId } = request.body;
 
 				if (redirectSectionId !== undefined && redirectSectionId !== null) {
-					const loop = await hasRedirectLoop(fastify.mysql, request.params.id, redirectSectionId);
+					const loop = await hasRedirectLoop(fastify.mysql, request.params.sectionId, redirectSectionId);
 					if (loop) {
 						return reply.code(409).send({ error: 'Redirect would create a loop' });
 					}
 				}
 
-				await updateSection(fastify.mysql, request.params.id, request.body, current);
-				const updated = await getCmsSectionById(fastify.mysql, request.params.id);
+				await updateSection(fastify.mysql, request.params.sectionId, request.body, current);
+				const updated = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
-				request.log.info({ sectionId: request.params.id }, 'Section updated');
+				request.log.info({ sectionId: request.params.sectionId }, 'Section updated');
 				return updated;
 			} catch (error) {
 				request.log.error(error);
@@ -178,7 +178,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.delete<{ Params: SectionIdParam }>('/sections/:id', {
+	fastify.delete<{ Params: SectionIdParam }>('/sections/:sectionId', {
 		onRequest: requireCanEditContent,
 		schema: {
 			description: 'Delete a section. Cascades thing_identifiers. Refuses if external redirects exist.',
@@ -195,21 +195,21 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 		},
 		handler: async (request, reply) => {
 			try {
-				const current = await getCmsSectionById(fastify.mysql, request.params.id);
+				const current = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
 				if (!current) {
 					return reply.code(404).send({ error: 'Section not found' });
 				}
 
-				const redirects = await getExternalRedirectsToSection(fastify.mysql, request.params.id);
+				const redirects = await getExternalRedirectsToSection(fastify.mysql, request.params.sectionId);
 
 				if (redirects.length > 0) {
 					const sources = redirects.map((r) => `${r.fromSectionIdentifier}:thing#${r.fromThingId}`).join(', ');
 					return reply.code(409).send({ error: `Section has incoming redirects from: ${sources}` });
 				}
 
-				await deleteSection(fastify.mysql, request.params.id);
-				request.log.info({ sectionId: request.params.id }, 'Section deleted');
+				await deleteSection(fastify.mysql, request.params.sectionId);
+				request.log.info({ sectionId: request.params.sectionId }, 'Section deleted');
 				return reply.code(204).send();
 			} catch (error) {
 				request.log.error(error);

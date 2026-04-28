@@ -19,36 +19,36 @@ elif [ -n "$ACCESS_TOKEN" ]; then
     if [ -n "$INT_SECTION_ID" ] && [ -n "$THING_A_ID" ] && [ -n "$THING_B_ID" ]; then
         # Add things to section
         parse_response "$(request POST "/cms/sections/${INT_SECTION_ID}/things" "{\"thingId\":${THING_A_ID}}" "$ACCESS_TOKEN")"
-        assert_status "POST /cms/sections/:id/things (add A)" 201 "$RESPONSE_STATUS"
+        assert_status "POST /cms/sections/:sectionId/things (add A)" 201 "$RESPONSE_STATUS"
 
         parse_response "$(request POST "/cms/sections/${INT_SECTION_ID}/things" "{\"thingId\":${THING_B_ID}}" "$ACCESS_TOKEN")"
-        assert_status "POST /cms/sections/:id/things (add B)" 201 "$RESPONSE_STATUS"
+        assert_status "POST /cms/sections/:sectionId/things (add B)" 201 "$RESPONSE_STATUS"
 
         # Reorder things in section
         parse_response "$(request PUT "/cms/sections/${INT_SECTION_ID}/things/reorder" "[${THING_B_ID},${THING_A_ID}]" "$ACCESS_TOKEN")"
-        assert_status "PUT /cms/sections/:id/things/reorder" 200 "$RESPONSE_STATUS"
+        assert_status "PUT /cms/sections/:sectionId/things/reorder" 200 "$RESPONSE_STATUS"
 
         # Delete thing that is in section — should fail
         parse_response "$(request DELETE "/cms/things/${THING_A_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/things/:id (in section, expect 409)" 409 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/things/:thingId (in section, expect 409)" 409 "$RESPONSE_STATUS"
 
         # Remove things from section
         parse_response "$(request DELETE "/cms/sections/${INT_SECTION_ID}/things/${THING_A_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/sections/:id/things/:thingId (remove A)" 204 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/sections/:sectionId/things/:thingId (remove A)" 204 "$RESPONSE_STATUS"
 
         parse_response "$(request DELETE "/cms/sections/${INT_SECTION_ID}/things/${THING_B_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/sections/:id/things/:thingId (remove B)" 204 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/sections/:sectionId/things/:thingId (remove B)" 204 "$RESPONSE_STATUS"
 
         # Now delete things (should succeed)
         parse_response "$(request DELETE "/cms/things/${THING_A_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/things/:id (A, after removal)" 204 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/things/:thingId (A, after removal)" 204 "$RESPONSE_STATUS"
 
         parse_response "$(request DELETE "/cms/things/${THING_B_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/things/:id (B, after removal)" 204 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/things/:thingId (B, after removal)" 204 "$RESPONSE_STATUS"
 
         # Delete section
         parse_response "$(request DELETE "/cms/sections/${INT_SECTION_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/sections/:id (interaction cleanup)" 204 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/sections/:sectionId (interaction cleanup)" 204 "$RESPONSE_STATUS"
     else
         red "  SKIP  CMS section-thing interactions (could not create test data)"
         FAIL=$((FAIL + 8))
