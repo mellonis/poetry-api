@@ -37,7 +37,7 @@ export const cmsSectionsResponse = z.array(cmsSectionItem);
 // --- Section params ---
 
 export const sectionIdParam = z.object({
-	id: z.coerce.number().int().positive(),
+	sectionId: z.coerce.number().int().positive(),
 });
 
 // --- Create section ---
@@ -90,7 +90,7 @@ export const cmsSectionThingItem = cmsThingItem.extend({
 export const cmsSectionThingsResponse = z.array(cmsSectionThingItem);
 
 export const thingInSectionParams = z.object({
-	id: z.coerce.number().int().positive(),
+	sectionId: z.coerce.number().int().positive(),
 	thingId: z.coerce.number().int().positive(),
 });
 

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const userIdParam = z.object({
-	id: z.coerce.number().int().positive(),
+	userId: z.coerce.number().int().positive(),
 });
 
 export const changePasswordRequest = z.object({

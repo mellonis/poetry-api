@@ -28,9 +28,9 @@ export async function sectionsPlugin(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.get('/:id', {
+	fastify.get('/:identifier', {
 		schema: {
-			description: 'Get things (poems/prose) in a section by section ID.',
+			description: 'Get things (poems/prose) in a section by section identifier.',
 			tags: ['Sections'],
 			params: thingsRequest,
 			response: {
@@ -41,7 +41,7 @@ export async function sectionsPlugin(fastify: FastifyInstance) {
 		},
 		handler: async (request: FastifyRequest<{ Params: ThingsRequest }>, reply) => {
 			try {
-				const section = await getSectionById(fastify.mysql, request.params.id);
+				const section = await getSectionById(fastify.mysql, request.params.identifier);
 
 				if (!section) {
 					return reply.code(404).send();
@@ -49,7 +49,7 @@ export async function sectionsPlugin(fastify: FastifyInstance) {
 
 				const userId = request.user?.sub;
 
-				return await getSectionThings(fastify.mysql, request.params.id, userId);
+				return await getSectionThings(fastify.mysql, request.params.identifier, userId);
 			} catch (error) {
 				request.log.error(error);
 				reply.status(500).send({ error: 'Internal server error' });

@@ -41,15 +41,15 @@ NEW_USER_ID=$(echo "$RESPONSE_BODY" | grep -o '"id":[[:space:]]*[0-9]*' | head -
 if [ -n "$NEW_USER_ID" ]; then
     # Get user
     parse_response "$(request GET "/cms/users/${NEW_USER_ID}" "" "$ACCESS_TOKEN")"
-    assert_status "GET /cms/users/:id" 200 "$RESPONSE_STATUS"
+    assert_status "GET /cms/users/:userId" 200 "$RESPONSE_STATUS"
 
     # Update user
     parse_response "$(request PUT "/cms/users/${NEW_USER_ID}" "{\"groupId\":2}" "$ACCESS_TOKEN")"
-    assert_status "PUT /cms/users/:id (update)" 200 "$RESPONSE_STATUS"
+    assert_status "PUT /cms/users/:userId (update)" 200 "$RESPONSE_STATUS"
 
     # Delete user
     parse_response "$(request DELETE "/cms/users/${NEW_USER_ID}" "" "$ACCESS_TOKEN")"
-    assert_status "DELETE /cms/users/:id" 204 "$RESPONSE_STATUS"
+    assert_status "DELETE /cms/users/:userId" 204 "$RESPONSE_STATUS"
 else
     red "  SKIP  CMS user CRUD (could not extract user ID)"
     FAIL=$((FAIL + 3))

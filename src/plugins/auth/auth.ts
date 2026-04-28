@@ -22,7 +22,7 @@ const requirePositiveIntEnv = (envName: string): void => {
 	if (!value) {
 		throw new Error(`${envName} environment variable is not set`);
 	}
-	const parsed = parseInt(value, 10);
+	const parsed = Number(value);
 	if (!Number.isFinite(parsed) || parsed <= 0) {
 		throw new Error(`${envName} must be a positive integer (seconds)`);
 	}

@@ -21,7 +21,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 
 	fastify.addHook('onRequest', fastify.verifyJwt);
 
-	fastify.patch('/:id/password', {
+	fastify.patch('/:userId/password', {
 		schema: {
 			description: 'Change the authenticated user\'s password. Revokes all sessions.',
 			tags: ['Users'],
@@ -37,17 +37,17 @@ export async function usersPlugin(fastify: FastifyInstance) {
 		},
 		handler: async (request: FastifyRequest<{ Params: UserIdParam; Body: ChangePasswordRequest }>, reply) => {
 			try {
-				const { id } = request.params;
+				const { userId } = request.params;
 				const { currentPassword, newPassword } = request.body;
 				const user = request.user!;
 
-				const isSelf = user.sub === id;
+				const isSelf = user.sub === userId;
 
 				if (!isSelf) {
 					return reply.code(403).send({ error: 'forbidden', message: 'Cannot change another user\'s password' });
 				}
 
-				const credentials = await getUserCredentials(fastify.mysql, id);
+				const credentials = await getUserCredentials(fastify.mysql, userId);
 
 				if (!credentials) {
 					return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
@@ -56,16 +56,16 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				const passwordValid = await checkPassword(currentPassword, credentials.passwordHash);
 
 				if (!passwordValid) {
-					request.log.warn({ login: user.login, userId: id }, 'Password change failed: invalid current password');
+					request.log.warn({ login: user.login, userId }, 'Password change failed: invalid current password');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
 				const newHash = await hashPassword(newPassword);
-				await updatePassword(fastify.mysql, id, newHash);
-				await deleteAllUserRefreshTokens(fastify.mysql, id);
+				await updatePassword(fastify.mysql, userId, newHash);
+				await deleteAllUserRefreshTokens(fastify.mysql, userId);
 				await fastify.authNotifier.sendPasswordChanged(credentials.email, user.login, fastify.resolveOrigin(request));
 
-				request.log.info({ login: user.login, userId: id }, 'Password changed');
+				request.log.info({ login: user.login, userId }, 'Password changed');
 				return { message: 'Password changed successfully' };
 			} catch (error) {
 				request.log.error(error);
@@ -74,7 +74,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 		},
 	});
 
-	fastify.delete('/:id', {
+	fastify.delete('/:userId', {
 		schema: {
 			description: 'Delete the authenticated user\'s account. Requires password confirmation.',
 			tags: ['Users'],
@@ -90,17 +90,17 @@ export async function usersPlugin(fastify: FastifyInstance) {
 		},
 		handler: async (request: FastifyRequest<{ Params: UserIdParam; Body: DeleteUserRequest }>, reply) => {
 			try {
-				const { id } = request.params;
+				const { userId } = request.params;
 				const { password } = request.body;
 				const user = request.user!;
 
-				const isSelf = user.sub === id;
+				const isSelf = user.sub === userId;
 
 				if (!isSelf) {
 					return reply.code(403).send({ error: 'forbidden', message: 'Cannot delete another user\'s account' });
 				}
 
-				const credentials = await getUserCredentials(fastify.mysql, id);
+				const credentials = await getUserCredentials(fastify.mysql, userId);
 
 				if (!credentials) {
 					return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
@@ -109,14 +109,14 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				const passwordValid = await checkPassword(password, credentials.passwordHash);
 
 				if (!passwordValid) {
-					request.log.warn({ login: user.login, userId: id }, 'Account deletion failed: invalid password');
+					request.log.warn({ login: user.login, userId }, 'Account deletion failed: invalid password');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
-				await deleteAllUserRefreshTokens(fastify.mysql, id);
-				await deleteUser(fastify.mysql, id);
+				await deleteAllUserRefreshTokens(fastify.mysql, userId);
+				await deleteUser(fastify.mysql, userId);
 
-				request.log.info({ login: user.login, userId: id }, 'Account deleted');
+				request.log.info({ login: user.login, userId }, 'Account deleted');
 
 				const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
 

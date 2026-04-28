@@ -34,7 +34,7 @@ export const sectionsResponse = z.array(
 );
 
 export const thingsRequest = z.object({
-	id: z.string(),
+	identifier: z.string(),
 });
 
 export const thingsResponse = z.array(

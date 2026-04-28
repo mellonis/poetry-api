@@ -33,6 +33,9 @@ import {
 	okResponse,
 	COMMENT_STATUS,
 	COMMENT_EDIT_WINDOW_MS,
+	DEFAULT_LIMIT,
+	MAX_LIMIT,
+	errorBody,
 	type CommentParams,
 	type CommentListQuery,
 	type CreateCommentRequest,
@@ -43,15 +46,10 @@ import {
 
 const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL;
 
-const DEFAULT_LIMIT = 20;
-const MAX_LIMIT = 100;
-
 const POST_RATE_LIMIT = { max: 1, timeWindow: '30 seconds' };
 const EDIT_RATE_LIMIT = { max: 10, timeWindow: '1 minute' };
 const VOTE_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
 const REPORT_RATE_LIMIT = { max: 1, timeWindow: '5 minutes' };
-
-const errorBody = (code: string, message?: string) => ({ error: code, ...(message ? { message } : {}) });
 
 // nextjs is configured without trailing slashes — paths end at the last
 // segment, query starts at `?`. Only the bare root `/` keeps its slash.

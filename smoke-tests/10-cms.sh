@@ -48,15 +48,15 @@ if [ -n "$ACCESS_TOKEN" ]; then
     if [ -n "$SECTION_DB_ID" ]; then
         # Update section
         parse_response "$(request PUT "/cms/sections/${SECTION_DB_ID}" "{\"title\":\"Smoke Updated\",\"settings\":{\"showAll\":true,\"reverseOrder\":false}}" "$ACCESS_TOKEN")"
-        assert_status "PUT /cms/sections/:id (update)" 200 "$RESPONSE_STATUS"
+        assert_status "PUT /cms/sections/:sectionId (update)" 200 "$RESPONSE_STATUS"
 
         # List things (empty)
         parse_response "$(request GET "/cms/sections/${SECTION_DB_ID}/things" "" "$ACCESS_TOKEN")"
-        assert_status "GET /cms/sections/:id/things" 200 "$RESPONSE_STATUS"
+        assert_status "GET /cms/sections/:sectionId/things" 200 "$RESPONSE_STATUS"
 
         # Delete section (empty, should succeed)
         parse_response "$(request DELETE "/cms/sections/${SECTION_DB_ID}" "" "$ACCESS_TOKEN")"
-        assert_status "DELETE /cms/sections/:id" 204 "$RESPONSE_STATUS"
+        assert_status "DELETE /cms/sections/:sectionId" 204 "$RESPONSE_STATUS"
     else
         red "  SKIP  CMS section CRUD (could not extract section ID)"
         FAIL=$((FAIL + 3))

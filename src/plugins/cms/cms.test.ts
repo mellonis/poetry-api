@@ -259,7 +259,7 @@ describe('POST /cms/sections', () => {
 	});
 });
 
-describe('DELETE /cms/sections/:id', () => {
+describe('DELETE /cms/sections/:sectionId', () => {
 	it('refuses deletion when section has incoming redirects', async () => {
 		// Responses: getCmsSectionById, getExternalRedirectsToSection
 		const app = await buildApp(createMockMysql(
@@ -294,7 +294,7 @@ describe('DELETE /cms/sections/:id', () => {
 
 // --- Things in section ---
 
-describe('GET /cms/sections/:id/things', () => {
+describe('GET /cms/sections/:sectionId/things', () => {
 	it('returns things in section', async () => {
 		const thingRow = { thingId: 1, position: 1, title: 'Poem', firstLines: 'Line 1\nLine 2' };
 		// Responses: getCmsSectionById, getCmsThingsInSection
@@ -314,7 +314,7 @@ describe('GET /cms/sections/:id/things', () => {
 	});
 });
 
-describe('POST /cms/sections/:id/things', () => {
+describe('POST /cms/sections/:sectionId/things', () => {
 	it('returns 404 when thing does not exist', async () => {
 		// Responses: getCmsSectionById, thingExists (empty = not found)
 		const app = await buildApp(createMockMysql([sectionRow], []));
@@ -332,7 +332,7 @@ describe('POST /cms/sections/:id/things', () => {
 	});
 });
 
-describe('PUT /cms/sections/:id/things/reorder', () => {
+describe('PUT /cms/sections/:sectionId/things/reorder', () => {
 	it('rejects mismatched thing IDs', async () => {
 		// Responses: getCmsSectionById, getSectionThingIds
 		const app = await buildApp(createMockMysql(

@@ -297,13 +297,13 @@ export async function passkeyRoutesPlugin(fastify: FastifyInstance) {
 		},
 	});
 
-	// DELETE /passkeys/:id — remove a passkey (auth required)
-	fastify.delete('/passkeys/:id', {
+	// DELETE /passkeys/:passkeyId — remove a passkey (auth required)
+	fastify.delete('/passkeys/:passkeyId', {
 		schema: {
 			description: 'Delete a passkey owned by the authenticated user.',
 			tags: ['Passkey'],
 			params: z.object({
-				id: z.coerce.number().int().positive(),
+				passkeyId: z.coerce.number().int().positive(),
 			}),
 			response: {
 				204: z.void(),
@@ -313,15 +313,15 @@ export async function passkeyRoutesPlugin(fastify: FastifyInstance) {
 			},
 		},
 		preHandler: [fastify.verifyJwt],
-		handler: async (request: FastifyRequest<{ Params: { id: number } }>, reply) => {
+		handler: async (request: FastifyRequest<{ Params: { passkeyId: number } }>, reply) => {
 			try {
-				const deleted = await deletePasskey(fastify.mysql, request.params.id, request.user!.sub);
+				const deleted = await deletePasskey(fastify.mysql, request.params.passkeyId, request.user!.sub);
 
 				if (!deleted) {
 					return reply.code(404).send({ error: 'not_found', message: 'Passkey not found' });
 				}
 
-				request.log.info({ userId: request.user!.sub, passkeyId: request.params.id }, 'Passkey deleted');
+				request.log.info({ userId: request.user!.sub, passkeyId: request.params.passkeyId }, 'Passkey deleted');
 				return reply.code(204).send();
 			} catch (error) {
 				request.log.error(error);
