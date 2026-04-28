@@ -370,6 +370,16 @@ Authorization: Bearer {{login.response.body.accessToken}}
   "vote": null
 }
 
+### Batch vote summaries by ids (anonymous OK; userVote: null when not signed in)
+GET {{host}}/things/votes?thingIds=1,2,3
+
+### Batch vote summaries by ids — authenticated (userVote enriched)
+GET {{host}}/things/votes?thingIds=1,2,3
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Batch vote summaries for every thing in a section (covers unvoted with zero counts)
+GET {{host}}/things/votes?sectionId=nnils
+
 ### ---- Comments ----
 
 ### List comments for a thing (public; auth optional for userVote)

@@ -46,8 +46,8 @@ const thingRow = {
 	seoKeywords: null,
 	info: null,
 	notes: null,
-	votesPlus: 0,
-	votesMinus: 0,
+	votesLikes: 0,
+	votesDislikes: 0,
 	sectionId: 'poetry',
 	position: 3,
 };
@@ -65,7 +65,7 @@ describe('GET /things-of-the-day', () => {
 			firstLines: ['First line', 'Second line'],
 			finishDate: '2024-01-01',
 			text: 'Full poem text',
-			votes: { plus: 0, minus: 0 },
+			votes: { likes: 0, dislikes: 0 },
 			sections: [{ id: 'poetry', position: 3 }],
 		}]);
 	});
