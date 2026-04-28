@@ -32,8 +32,8 @@ export const thingSchema = z.object({
 		})),
 	})),
 	votes: z.object({
-		plus: z.number().int().min(0),
-		minus: z.number().int().min(0),
+		likes: z.number().int().min(0),
+		dislikes: z.number().int().min(0),
 	}),
 	userVote: z.optional(voteValueSchema),
 });

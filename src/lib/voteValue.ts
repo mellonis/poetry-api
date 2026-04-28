@@ -5,6 +5,16 @@ import { z } from 'zod';
 export const voteValueSchema = z.enum(['like', 'dislike']).nullable();
 export type VoteValue = z.infer<typeof voteValueSchema>;
 
+// Shared response shape for vote endpoints (thing votes + comment votes).
+// Centralized so the two domains stay in lockstep — adding a field here
+// updates both at once.
+export const voteSummarySchema = z.object({
+	likes: z.number().int().min(0),
+	dislikes: z.number().int().min(0),
+	userVote: voteValueSchema,
+});
+export type VoteSummary = z.infer<typeof voteSummarySchema>;
+
 export const voteValueToDb = (v: VoteValue): -1 | 0 | 1 => {
 	if (v === 'like') return 1;
 	if (v === 'dislike') return -1;

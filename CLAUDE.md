@@ -57,7 +57,7 @@ See `.env.example` for a template. The server listens on `0.0.0.0:3000` (port ov
 Fastify app using a plugin-based structure under `src/plugins/`:
 
 - **`database/`** — registers the MySQL connection pool on the Fastify instance via `@fastify/mysql`
-- **`auth/`** — `auth.ts` is a `fastify-plugin` decorator (`verifyJwt`, `requireRight`) visible to all plugins
+- **`auth/`** — `auth.ts` is a `fastify-plugin` decorator (`verifyJwt`, `optionalVerifyJwt`, `requireRight`) visible to all plugins
   - `authRoutes.ts` — routes prefixed `/auth` (register, activate, login, refresh, logout, password reset). Sends `ADMIN_NOTIFY_EMAIL` on new registration
   - Pure utilities: `password.ts`, `jwt.ts`, `rights.ts`, `issueTokens.ts`
   - `passkey/` — WebAuthn passkey routes (`/auth/passkey/*` for registration/login, `/auth/passkeys` for listing/deleting). RP ID configurable via `WEBAUTHN_RP_ID` env var
@@ -68,11 +68,11 @@ Fastify app using a plugin-based structure under `src/plugins/`:
 - **`sections/`** — routes prefixed `/sections`
 - **`thingsOfTheDay/`** — routes prefixed `/things-of-the-day`
 - **`users/`** — routes prefixed `/users` (change password, delete account). Sends `ADMIN_NOTIFY_EMAIL` on account deletion
-- **`votes/`** — routes prefixed `/things` for voting (`GET/PUT /:thingId/vote`)
-  - Requires auth + `canVote` right. Body `{ vote: 'like' | 'dislike' | null }` — `null` removes the vote
-  - Returns updated `{ plus, minus }` counts
-  - Sends `ADMIN_NOTIFY_EMAIL` on every vote action including removal (fire-and-forget, includes thing title)
-  - On the wire, vote values are strings; the DB column stays `tinyint(-1, 0, 1)`. Translation lives in `lib/voteValue.ts` (`voteValueToDb` / `dbToVoteValue`). `userVote` fields in any GET response that includes them (thing schema, comment list/single) follow the same enum
+- **`votes/`** — routes prefixed `/things` for voting
+  - `PUT /:thingId/vote` — `verifyJwt` + `canVote`. Body `{ vote: 'like' | 'dislike' | null }` — `null` removes the vote. Returns the updated `{ likes, dislikes, userVote }` summary (same shape as the batch GET and comment-vote endpoints). Sends `ADMIN_NOTIFY_EMAIL` on every vote action including removal (fire-and-forget, includes thing title).
+  - `GET /votes?thingIds=…` or `?sectionId=…` — `optionalVerifyJwt`. Batch summaries keyed by thingId-as-string: `{ "1": { likes, dislikes, userVote }, ... }`. Anonymous → `userVote: null`. Schema enforces *exactly one* of `thingIds` (1..100 unique positive int ids, comma-separated) or `sectionId` (`section.identifier`, max 64 chars, `[A-Za-z0-9_-]`). `thingIds` mode pre-fills zero summaries for ids with no vote rows so callers get a stable shape. `sectionId` mode joins `v_things_info` to cover every thing in the section (zero-filled for unvoted) and avoids client-side chunking on big `/sections/[id]/all` pages. Vote totals are global (a thing's votes don't change by section).
+  - Auth is per-route (`preHandler`), not a plugin-wide `addHook` — the GET needs to coexist with the auth-required PUT. If you add another route here, attach the appropriate preHandler explicitly.
+  - On the wire, vote values are strings; the DB column stays `tinyint(-1, 0, 1)`. Translation lives in `lib/voteValue.ts` (`voteValueToDb` / `dbToVoteValue`). The shared `voteSummarySchema` (`{ likes, dislikes, userVote }`) is also exported from `lib/voteValue.ts` and reused by both the thing-vote and comment-vote plugins so the wire shape stays in lockstep across the API. `userVote` fields in any GET response that includes them (thing schema, comment list/single, batch votes summary) follow the same enum.
 - **`author/`** — routes prefixed `/author`. `GET /` returns author biography text, date, and optional SEO fields. Sourced from `news` table (id=1). No auth required
 - **`comments/`** — routes prefixed `/comments`. Unified site-wide guestbook + per-thing comments in one table; `r_thing_id IS NULL` rows are guestbook entries. One-level threading (a reply's parent must itself be top-level). Post-moderation: new comments default to `Visible` (status 1). Status set: 1=Visible, 2=Hidden (mod-removed), 3=Deleted (self- or admin-removed)
   - Public: `GET /` (paginated by top-level + replies inline; `optionalVerifyJwt` enriches rows with `userVote`), `GET /:commentId` (top-level rows return `replies: []` bundled in for single-thread view; reply rows are returned bare since one-level threading bounds depth), `POST /` (auth + `canComment` bit 4 + rate-limit 1/30s; reply path also fires `commentReplyEmail` to the parent author when the parent is a different, non-banned user), `PUT /:commentId` (own + 15-min edit window), `DELETE /:commentId` (own → status=Deleted), `PUT /:commentId/vote` (auth + `canVote` + rate-limit 5/min, body `{ vote: 'like' | 'dislike' | null }` — `null` removes the vote; self-vote allowed), `POST /:commentId/report` (auth + rate-limit 1/5min, sends `ADMIN_NOTIFY_EMAIL`)

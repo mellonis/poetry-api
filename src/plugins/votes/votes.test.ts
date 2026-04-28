@@ -72,8 +72,10 @@ describe('PUT /things/:thingId/vote', () => {
 		expect(response.statusCode).toBe(403);
 	});
 
-	it('records a vote and returns updated counts', async () => {
-		const app = await buildApp(createMockMysql([], [{ plus: 3, minus: 1 }]));
+	it('records a vote and returns the updated summary', async () => {
+		// First mock response: upsertVote (no rows). Second: getVoteSummary
+		// (which runs voteSummariesQuery internally).
+		const app = await buildApp(createMockMysql([], [{ thingId: 1, likes: 3, dislikes: 1, userVote: 1 }]));
 		const token = await getToken();
 
 		const response = await app.inject({
@@ -84,7 +86,7 @@ describe('PUT /things/:thingId/vote', () => {
 		});
 
 		expect(response.statusCode).toBe(200);
-		expect(response.json()).toEqual({ plus: 3, minus: 1 });
+		expect(response.json()).toEqual({ likes: 3, dislikes: 1, userVote: 'like' });
 	});
 
 	it('rejects invalid vote values', async () => {
@@ -101,8 +103,9 @@ describe('PUT /things/:thingId/vote', () => {
 		expect(response.statusCode).toBe(400);
 	});
 
-	it('removes vote when vote is null and returns updated counts', async () => {
-		const app = await buildApp(createMockMysql([], [{ plus: 2, minus: 0 }]));
+	it('removes vote when vote is null and returns the updated summary', async () => {
+		// deleteVote (no rows), then getVoteSummary returning userVote=0 → null.
+		const app = await buildApp(createMockMysql([], [{ thingId: 1, likes: 2, dislikes: 0, userVote: 0 }]));
 		const token = await getToken();
 
 		const response = await app.inject({
@@ -113,6 +116,133 @@ describe('PUT /things/:thingId/vote', () => {
 		});
 
 		expect(response.statusCode).toBe(200);
-		expect(response.json()).toEqual({ plus: 2, minus: 0 });
+		expect(response.json()).toEqual({ likes: 2, dislikes: 0, userVote: null });
+	});
+});
+
+describe('GET /things/votes', () => {
+	it('returns summaries for anonymous callers with userVote: null', async () => {
+		const app = await buildApp(createMockMysql([
+			{ thingId: 1, likes: '4', dislikes: '1', userVote: 0 },
+			{ thingId: 2, likes: '0', dislikes: '2', userVote: 0 },
+		]));
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?thingIds=1,2,3',
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json()).toEqual({
+			1: { likes: 4, dislikes: 1, userVote: null },
+			2: { likes: 0, dislikes: 2, userVote: null },
+			// 3 has no vote rows — pre-filled zero summary.
+			3: { likes: 0, dislikes: 0, userVote: null },
+		});
+	});
+
+	it('returns userVote for authenticated callers', async () => {
+		const app = await buildApp(createMockMysql([
+			{ thingId: 7, likes: '5', dislikes: '0', userVote: 1 },
+		]));
+		const token = await getToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?thingIds=7',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json()).toEqual({
+			7: { likes: 5, dislikes: 0, userVote: 'like' },
+		});
+	});
+
+	it('rejects an empty ids list', async () => {
+		const app = await buildApp(createMockMysql());
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?thingIds=',
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('rejects non-integer ids', async () => {
+		const app = await buildApp(createMockMysql());
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?thingIds=1,abc,3',
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('caps the ids list at 100 entries', async () => {
+		const app = await buildApp(createMockMysql());
+		const ids = Array.from({ length: 101 }, (_, i) => i + 1).join(',');
+
+		const response = await app.inject({
+			method: 'GET',
+			url: `/things/votes?thingIds=${ids}`,
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('returns summaries for every thing in a section by sectionId', async () => {
+		const app = await buildApp(createMockMysql([
+			{ thingId: 11, likes: '2', dislikes: '1', userVote: 0 },
+			{ thingId: 12, likes: '0', dislikes: '0', userVote: 0 },
+			{ thingId: 13, likes: '4', dislikes: '0', userVote: 0 },
+		]));
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?sectionId=nnils',
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json()).toEqual({
+			11: { likes: 2, dislikes: 1, userVote: null },
+			12: { likes: 0, dislikes: 0, userVote: null },
+			13: { likes: 4, dislikes: 0, userVote: null },
+		});
+	});
+
+	it('rejects providing both ids and sectionId', async () => {
+		const app = await buildApp(createMockMysql());
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?thingIds=1,2&sectionId=nnils',
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('rejects providing neither ids nor sectionId', async () => {
+		const app = await buildApp(createMockMysql());
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes',
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('rejects invalid sectionId characters', async () => {
+		const app = await buildApp(createMockMysql());
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/things/votes?sectionId=has spaces',
+		});
+
+		expect(response.statusCode).toBe(400);
 	});
 });
