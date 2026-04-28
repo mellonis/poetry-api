@@ -10,7 +10,7 @@ declare module 'fastify' {
 }
 
 const INDEX_NAME = 'things';
-const INDEX_VERSION = 4;
+const INDEX_VERSION = 5;
 
 export { INDEX_NAME as SEARCH_INDEX_NAME };
 
