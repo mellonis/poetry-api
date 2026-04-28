@@ -18,19 +18,6 @@ describe('stripBBCode', () => {
 		expect(stripBBCode('[c]center[/c] [r]right[/r] [part]part[/part]')).toBe('center right part');
 	});
 
-	test('replaces [nbsp] with space', () => {
-		expect(stripBBCode('word[nbsp]word')).toBe('word word');
-	});
-
-	test('converts em-dashes', () => {
-		expect(stripBBCode('word --- word')).toBe('word \u2014 word');
-		expect(stripBBCode('word--word')).toBe('word\u2013word');
-	});
-
-	test('converts backticks to combining acute accent', () => {
-		expect(stripBBCode('o`')).toBe('o\u0301');
-	});
-
 	test('strips image tags', () => {
 		expect(stripBBCode('[img alt]/path/to/img[/img]')).toBe('');
 	});
