@@ -1,4 +1,15 @@
 import { z } from 'zod';
+import { normalizeLegacyInfoJson, normalizeLegacyText } from '../../lib/normalizeLegacyText.js';
+
+// Defensive normalization for legacy text fields rendered via the BBCode-like
+// renderer. DB stores canonical chars (em dash, NBSP, en dash, combining acute);
+// this guarantees that even when the request bypasses the CMS frontend, the DB
+// stays canonical. SEO/keywords/identifier/dates/IDs are intentionally excluded.
+const norm = <T extends string | null | undefined>(v: T): T =>
+	typeof v === 'string' ? (normalizeLegacyText(v) as T) : v;
+
+const normInfo = <T extends string | null | undefined>(v: T): T =>
+	typeof v === 'string' ? (normalizeLegacyInfoJson(v) as T) : v;
 
 // --- Section types reference ---
 
@@ -44,10 +55,10 @@ export const sectionIdParam = z.object({
 
 export const createSectionRequest = z.object({
 	identifier: z.string().regex(/^[a-z][a-z0-9]{1,6}$/),
-	title: z.string().min(1).max(45),
-	description: z.string().nullable().default(null),
-	annotationText: z.string().nullable().default(null),
-	annotationAuthor: z.string().max(100).nullable().default(null),
+	title: z.string().min(1).max(45).transform(norm),
+	description: z.string().nullable().default(null).transform(norm),
+	annotationText: z.string().nullable().default(null).transform(norm),
+	annotationAuthor: z.string().max(100).nullable().default(null).transform(norm),
 	typeId: z.number().int().min(1).max(3),
 	statusId: z.number().int().min(1).max(4).optional(),
 	redirectSectionId: z.number().int().nullable().default(null),
@@ -58,10 +69,10 @@ export const createSectionRequest = z.object({
 // --- Update section ---
 
 export const updateSectionRequest = z.object({
-	title: z.string().min(1).max(45).optional(),
-	description: z.string().nullable().optional(),
-	annotationText: z.string().nullable().optional(),
-	annotationAuthor: z.string().max(100).nullable().optional(),
+	title: z.string().min(1).max(45).optional().transform(norm),
+	description: z.string().nullable().optional().transform(norm),
+	annotationText: z.string().nullable().optional().transform(norm),
+	annotationAuthor: z.string().max(100).nullable().optional().transform(norm),
 	typeId: z.number().int().min(1).max(3).optional(),
 	statusId: z.number().int().min(1).max(4).optional(),
 	redirectSectionId: z.number().int().nullable().optional(),
@@ -115,7 +126,7 @@ export const cmsAuthorResponse = z.object({
 });
 
 export const updateAuthorRequest = z.object({
-	text: z.string().min(1),
+	text: z.string().min(1).transform(norm),
 	date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 	seoDescription: z.string().nullable().default(null),
 	seoKeywords: z.string().nullable().default(null),
@@ -125,7 +136,7 @@ export const updateAuthorRequest = z.object({
 
 const thingNoteItem = z.object({
 	id: z.number().int().optional(),
-	text: z.string().min(1),
+	text: z.string().min(1).transform(norm),
 });
 
 // SEO fields must be provided together or both be null/undefined
@@ -183,35 +194,35 @@ export const thingIdParam = z.object({
 });
 
 export const createThingRequest = z.object({
-	title: z.string().nullable().default(null),
-	text: z.string().min(1),
+	title: z.string().nullable().default(null).transform(norm),
+	text: z.string().min(1).transform(norm),
 	categoryId: z.number().int().min(1).max(4),
 	statusId: z.number().int().min(1).max(4).default(1),
 	startDate: partialDate.nullable().default(null),
 	finishDate: partialDate,
-	firstLines: z.string().nullable().default(null),
+	firstLines: z.string().nullable().default(null).transform(norm),
 	firstLinesAutoGenerating: z.literal(false).default(false),
 	excludeFromDaily: z.boolean().default(false),
 	notes: z.array(thingNoteItem).default([]),
 	seoDescription: z.string().nullable().default(null),
 	seoKeywords: z.string().nullable().default(null),
-	info: z.string().nullable().default(null),
+	info: z.string().nullable().default(null).transform(normInfo),
 }).refine(seoFieldsTogether, seoFieldsTogetherMessage);
 
 export const updateThingRequest = z.object({
-	title: z.string().nullable().optional(),
-	text: z.string().min(1).optional(),
+	title: z.string().nullable().optional().transform(norm),
+	text: z.string().min(1).optional().transform(norm),
 	categoryId: z.number().int().min(1).max(4).optional(),
 	statusId: z.number().int().min(1).max(4).optional(),
 	startDate: partialDate.nullable().optional(),
 	finishDate: partialDate.optional(),
-	firstLines: z.string().nullable().optional(),
+	firstLines: z.string().nullable().optional().transform(norm),
 	firstLinesAutoGenerating: z.literal(false).optional(),
 	excludeFromDaily: z.boolean().optional(),
 	notes: z.array(thingNoteItem).optional(),
 	seoDescription: z.string().nullable().optional(),
 	seoKeywords: z.string().nullable().optional(),
-	info: z.string().nullable().optional(),
+	info: z.string().nullable().optional().transform(normInfo),
 }).refine(seoFieldsTogether, seoFieldsTogetherMessage);
 
 // --- Inferred types ---
