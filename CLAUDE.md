@@ -146,4 +146,4 @@ Validation and serialization use `fastify-type-provider-zod`. All Fastify route 
 
 **Logging** uses `pino-pretty` only when `NODE_ENV !== 'production'`; raw Pino otherwise.
 
-**Deployment**: image at `ghcr.io/mellonis/poetry-api`. Workflow pattern lives in workspace `CLAUDE.md`. PRs touching only `.md` files, `api.http`, or `smoke-test*.sh` skip the workflow entirely. When upgrading Node.js, keep the version in sync across `Dockerfile`, `.github/workflows/deploy.yml` (`node-version`), `tsconfig.json` (`@tsconfig/nodeXX`), and `package.json` (`@tsconfig/nodeXX` + `@types/node`).
+**Deployment**: image at `ghcr.io/mellonis/poetry-api`. Workflow pattern lives in `mellonis/vps` (`vps/CLAUDE.md`). PRs touching only `.md` files, `api.http`, or `smoke-test*.sh` skip the workflow entirely. When upgrading Node.js, keep the version in sync across `Dockerfile`, `.github/workflows/deploy.yml` (`node-version`), `tsconfig.json` (`@tsconfig/nodeXX`), and `package.json` (`@tsconfig/nodeXX` + `@types/node`).
