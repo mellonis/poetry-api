@@ -77,8 +77,7 @@ jobs:
         env:
           SSH_HOST: ${{ secrets.SSH_HOST }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          SSH_TARGET: ${{ secrets.SSH_TARGET }}
           IMAGE: ghcr.io/${{ github.repository }}:${{ github.sha }}
         run: |
           ssh -o StrictHostKeyChecking=no $SSH_USER@$SSH_HOST \
-            "IMAGE=$IMAGE $SSH_TARGET/run.sh poetry-api"
+            "IMAGE=$IMAGE /var/web-apps/run.sh poetry-api"
