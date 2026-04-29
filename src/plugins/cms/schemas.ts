@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidIsoDate } from '../../lib/isoDate.js';
 import { normalizeLegacyInfoJson, normalizeLegacyText } from '../../lib/normalizeLegacyText.js';
 
 // Defensive normalization for legacy text fields rendered via the BBCode-like
@@ -149,28 +150,10 @@ const seoFieldsTogether = (d: { seoDescription?: string | null; seoKeywords?: st
 };
 const seoFieldsTogetherMessage = { message: 'seoDescription and seoKeywords must be provided together or both be null' };
 
-// Partial date: YYYY-00-00 (year), YYYY-MM-00 (year-month), YYYY-MM-DD (full)
-// YYYY-00-DD is invalid (month=0 with day≠0)
-const partialDateRegex = /^\d{4}-(00-00|(0[1-9]|1[0-2])-(00|0[1-9]|[12]\d|3[01]))$/;
-
-const isValidPartialDate = (value: string): boolean => {
-	if (!partialDateRegex.test(value)) {
-		return false;
-	}
-
-	const [, mm, dd] = value.split('-');
-
-	// Partial dates (with 00) are valid by format alone
-	if (mm === '00' || dd === '00') {
-		return true;
-	}
-
-	// Full dates: verify the day is valid for the month
-	const date = new Date(value);
-	return date.getMonth() + 1 === Number(mm) && date.getDate() === Number(dd);
-};
-
-const partialDate = z.string().refine(isValidPartialDate, { message: 'Invalid date' });
+// ISO partial date: YYYY (year), YYYY-MM (year-month), YYYY-MM-DD (full).
+// Wire format; the cms helpers pad to YYYY-MM-DD with -00 segments before
+// inserting into the legacy MySQL DATE columns.
+const partialDate = z.string().refine(isValidIsoDate, { message: 'Invalid date' });
 
 export const cmsThingResponse = z.object({
 	id: z.number().int(),

@@ -353,6 +353,177 @@ describe('PUT /cms/sections/:sectionId/things/reorder', () => {
 	});
 });
 
+// --- CMS thing date format ---
+
+const thingRow = {
+	id: 42,
+	title: 'Test',
+	text: 'Body',
+	categoryId: 1,
+	statusId: 2,
+	startDate: null,
+	finishDate: '1990-05-12',
+	firstLines: null,
+	firstLinesAutoGenerating: 0,
+	excludeFromDaily: 0,
+	seoDescription: null,
+	seoKeywords: null,
+	info: null,
+};
+
+describe('GET /cms/things/:thingId — date format', () => {
+	it('returns full date as YYYY-MM-DD', async () => {
+		const app = await buildApp(createMockMysql([thingRow], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things/42',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json().finishDate).toBe('1990-05-12');
+	});
+
+	it('trims YYYY-MM-00 to YYYY-MM', async () => {
+		const app = await buildApp(createMockMysql([{ ...thingRow, finishDate: '1990-05-00' }], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things/42',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.json().finishDate).toBe('1990-05');
+	});
+
+	it('trims YYYY-00-00 to YYYY', async () => {
+		const app = await buildApp(createMockMysql([{ ...thingRow, finishDate: '1990-00-00' }], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things/42',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.json().finishDate).toBe('1990');
+	});
+
+	it('returns startDate trimmed too', async () => {
+		const app = await buildApp(createMockMysql([{ ...thingRow, startDate: '1989-00-00', finishDate: '1990-05-00' }], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things/42',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.json().startDate).toBe('1989');
+		expect(response.json().finishDate).toBe('1990-05');
+	});
+});
+
+describe('POST /cms/things — date format', () => {
+	const basePayload = {
+		title: null,
+		text: 'Body',
+		categoryId: 1,
+		notes: [],
+	};
+
+	it('accepts ISO year-only and pads to YYYY-00-00 on write', async () => {
+		const app = await buildApp(createMockMysql(
+			[{ insertId: 99 }],
+			[thingRow],
+			[],
+		));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/cms/things',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { ...basePayload, finishDate: '1990' },
+		});
+
+		expect(response.statusCode).toBe(201);
+	});
+
+	it('accepts ISO year-month', async () => {
+		const app = await buildApp(createMockMysql([{ insertId: 99 }], [thingRow], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/cms/things',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { ...basePayload, finishDate: '1990-05' },
+		});
+
+		expect(response.statusCode).toBe(201);
+	});
+
+	it('accepts ISO full date', async () => {
+		const app = await buildApp(createMockMysql([{ insertId: 99 }], [thingRow], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/cms/things',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { ...basePayload, finishDate: '1990-05-12' },
+		});
+
+		expect(response.statusCode).toBe(201);
+	});
+
+	it('rejects legacy YYYY-MM-00 form', async () => {
+		const app = await buildApp(createMockMysql([{ insertId: 99 }], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/cms/things',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { ...basePayload, finishDate: '1990-05-00' },
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('rejects invalid month', async () => {
+		const app = await buildApp(createMockMysql([{ insertId: 99 }], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/cms/things',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { ...basePayload, finishDate: '1990-13' },
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+
+	it('rejects day-in-month mismatch', async () => {
+		const app = await buildApp(createMockMysql([{ insertId: 99 }], []));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/cms/things',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { ...basePayload, finishDate: '1990-02-31' },
+		});
+
+		expect(response.statusCode).toBe(400);
+	});
+});
+
 // --- User management ---
 
 const userRow = {

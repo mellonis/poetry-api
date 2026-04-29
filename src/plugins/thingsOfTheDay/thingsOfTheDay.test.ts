@@ -77,12 +77,12 @@ describe('GET /things-of-the-day', () => {
 		expect(response.json()[0].firstLines).toBeUndefined();
 	});
 
-	it('returns things with unknown day (YYYY-MM-00)', async () => {
+	it('returns things with unknown day (DB YYYY-MM-00 → wire YYYY-MM)', async () => {
 		const app = buildApp(createMockMysql([{ ...thingRow, finishDate: '2024-01-00' }]));
 		const response = await app.inject({ method: 'GET', url: '/things-of-the-day' });
 
 		expect(response.statusCode).toBe(200);
-		expect(response.json()[0].finishDate).toBe('2024-01-00');
+		expect(response.json()[0].finishDate).toBe('2024-01');
 	});
 
 	it('uses fallback when no things match today\'s date', async () => {

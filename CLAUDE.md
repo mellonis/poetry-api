@@ -103,6 +103,7 @@ Shared utilities in `src/lib/`:
 - `schemas.ts` — Zod schemas (shared `thingSchema`, `errorResponse`)
 - `queries.ts` — SQL fragments (thing fields, user vote field)
 - `mappers.ts` — row mappers (`mapThingBaseRow`, `splitLines`, `parseJSON`, `thingDisplayTitle`)
+- `isoDate.ts` — date format conversion at the wire boundary (`dbDateToIso`, `isoDateToDb`, `isValidIsoDate`)
 - `databaseHelpers.ts` — `withConnection` (pool acquire/release)
 - `email.ts` — SMTP transport via nodemailer
 - `emailTemplates.ts` — email templates:
@@ -138,6 +139,8 @@ Validation and serialization use `fastify-type-provider-zod`. All Fastify route 
 **Notes aggregation** uses a correlated subquery with `GROUP_CONCAT(JSON_QUOTE(text) ORDER BY id SEPARATOR ',')` wrapped in `CONCAT('[', ..., ']')` (legacy pattern — `JSON_ARRAYAGG` is available on the current MySQL 8.4.8 if refactored).
 
 **`things-of-the-day` selection** — primary query matches by `MM-DD` ignoring year via `SUBSTRING(thing_finish_date, 6)`, also handles partial dates (`YYYY-MM-00`, `YYYY-00-00`), ordered newest year first. Fallback uses `RAND(TO_DAYS(CURDATE()))` seeded by date for stable daily randomness. Results are grouped by `thing_id` in the app to collect `sections: [{id, position}]`.
+
+**Date format** — thing dates support partial precision. DB columns (`thing.start_date`, `thing.finish_date`) are MySQL `DATE` storing `YYYY-MM-DD` with `00` segments for unknown month/day (e.g. `1990-05-00` = May 1990, `1990-00-00` = year 1990, `0000-00-00` = undated). On the wire the api speaks ISO partial: `YYYY` | `YYYY-MM` | `YYYY-MM-DD`. `lib/isoDate.ts` does the conversion: `dbDateToIso` trims trailing `-00` segments on read (in `mapThingBaseRow` and `cms/databaseHelpers.ts:getCmsThing`); `isoDateToDb` pads back to `YYYY-MM-DD` for INSERT/UPDATE (in `cms/databaseHelpers.ts:createThing`/`updateThing`). The Zod `partialDate` validator in `cms/schemas.ts` accepts only the ISO partial form, including a day-in-month check for full dates. `news.date` is exact-only and round-trips unchanged. The `things-of-the-day` SQL still works on raw DB form because it runs server-side before the mapper.
 
 **`withConnection(mysql, fn)`** in `src/lib/databaseHelpers.ts` — shared helper for all DB access; handles pool acquire/release via try/finally. MySQL server timezone is set to `+03:00` (Moscow) via `default-time-zone` in `mysql.cnf` — all `NOW()`, `CURDATE()`, and timestamp comparisons run in Moscow time. Verification key TTL checks use `Date.now()` (Node.js clock, UTC epoch) against the key's embedded timestamp (also `Date.now()` at generation) — self-consistent regardless of server timezone. These two clocks (DB server vs Node.js) don't cross.
 

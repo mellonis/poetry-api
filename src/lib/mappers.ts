@@ -1,6 +1,7 @@
 import type { MySQLRowDataPacket } from '@fastify/mysql';
 import type { z } from 'zod';
 import type { thingSchema } from './schemas.js';
+import { dbDateToIso } from './isoDate.js';
 import { dbToVoteValue } from './voteValue.js';
 
 type ThingBase = z.infer<typeof thingSchema>;
@@ -37,8 +38,8 @@ export const mapThingBaseRow = (row: MySQLRowDataPacket) => ({
 	categoryId: row.categoryId,
 	title: row.title ?? undefined as string | undefined,
 	firstLines: (row.firstLines ?? undefined) ? splitLines(row.firstLines as string) : undefined,
-	startDate: row.startDate ?? undefined as string | undefined,
-	finishDate: row.finishDate ?? undefined as string | undefined,
+	startDate: row.startDate ? dbDateToIso(row.startDate as string) : undefined,
+	finishDate: dbDateToIso(row.finishDate as string),
 	lastModified: row.lastModified ?? undefined as string | undefined,
 	text: row.text as string,
 	seoDescription: row.seoDescription ?? undefined as string | undefined,
