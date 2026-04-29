@@ -1,5 +1,6 @@
 import type { MySQLPromisePool, MySQLResultSetHeader, MySQLRowDataPacket } from '@fastify/mysql';
 import { withConnection } from '../../lib/databaseHelpers.js';
+import { dbDateToIso, isoDateToDb } from '../../lib/isoDate.js';
 import { parseJSON, splitLines } from '../../lib/mappers.js';
 import {
 	sectionTypesQuery,
@@ -457,8 +458,8 @@ export const getCmsThing = async (mysql: MySQLPromisePool, thingId: number): Pro
 			text: row.text as string,
 			categoryId: row.categoryId as number,
 			statusId: row.statusId as number,
-			startDate: (row.startDate as string) ?? null,
-			finishDate: row.finishDate as string,
+			startDate: row.startDate ? dbDateToIso(row.startDate as string) : null,
+			finishDate: dbDateToIso(row.finishDate as string),
 			firstLines: (row.firstLines as string) ?? null,
 			firstLinesAutoGenerating: Boolean(row.firstLinesAutoGenerating),
 			excludeFromDaily: Boolean(row.excludeFromDaily),
@@ -484,7 +485,8 @@ export const createThing = async (
 		try {
 			const [result] = await connection.query<MySQLResultSetHeader>(createThingQuery, [
 				data.title, data.text, data.categoryId, data.statusId,
-				data.startDate, data.finishDate,
+				data.startDate ? isoDateToDb(data.startDate) : null,
+				isoDateToDb(data.finishDate),
 				data.firstLines, data.firstLinesAutoGenerating ? 1 : 0, data.excludeFromDaily ? 1 : 0,
 			]);
 			const thingId = result.insertId;
@@ -524,13 +526,15 @@ export const updateThing = async (
 	withConnection(mysql, async (connection) => {
 		await connection.beginTransaction();
 		try {
+			const nextStart = data.startDate !== undefined ? data.startDate : current.startDate;
+			const nextFinish = data.finishDate ?? current.finishDate;
 			await connection.query(updateThingQuery, [
 				data.title ?? current.title,
 				data.text ?? current.text,
 				data.categoryId ?? current.categoryId,
 				data.statusId ?? current.statusId,
-				data.startDate !== undefined ? data.startDate : current.startDate,
-				data.finishDate ?? current.finishDate,
+				nextStart ? isoDateToDb(nextStart) : null,
+				isoDateToDb(nextFinish),
 				data.firstLines !== undefined ? data.firstLines : current.firstLines,
 				(data.firstLinesAutoGenerating ?? current.firstLinesAutoGenerating) ? 1 : 0,
 				(data.excludeFromDaily ?? current.excludeFromDaily) ? 1 : 0,
