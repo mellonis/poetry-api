@@ -10,6 +10,7 @@ import {
 	commentByIdQuery,
 	commentMetaByIdQuery,
 	commentReplyContextQuery,
+	commentVoteContextQuery,
 	insertCommentQuery,
 	updateCommentTextQuery,
 	setCommentStatusQuery,
@@ -215,6 +216,64 @@ export const getCommentReplyContext = async (
 
 		return {
 			parentAuthor,
+			thingId: (row.thingId as number | null) ?? null,
+			sectionIdentifier: (row.sectionIdentifier as string | null) ?? null,
+			positionInSection: (row.positionInSection as number | null) ?? null,
+		};
+	});
+
+export interface CommentVoteContext {
+	author:
+		| {
+			userId: number;
+			login: string;
+			email: string;
+			isBanned: boolean;
+		}
+		| null;
+	commentText: string;
+	threadCommentId: number;
+	thingId: number | null;
+	sectionIdentifier: string | null;
+	positionInSection: number | null;
+}
+
+// Returns the voted comment's author info (for the email recipient), the
+// comment text (for the email excerpt), the thread id (top-level id for the
+// deep link), and the section/position for the link URL.
+// Returns null when the comment row does not exist.
+// Returns null author when the comment author was deleted (r_user_id is NULL).
+export const getCommentVoteContext = async (
+	mysql: MySQLPromisePool,
+	commentId: number,
+): Promise<CommentVoteContext | null> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(commentVoteContextQuery, [commentId]);
+		const row = rows[0];
+		if (!row) return null;
+
+		const userRights = (row.authorUserRights as number | null) ?? 0;
+		const groupRights = (row.authorGroupRights as number | null) ?? 0;
+		const banned = isBanned(userRights) || isBanned(groupRights);
+
+		const author = row.authorUserId
+			? {
+				userId: row.authorUserId as number,
+				login: row.authorLogin as string,
+				email: row.authorEmail as string,
+				isBanned: banned,
+			}
+			: null;
+
+		// Deep links always point to a top-level comment. For replies, use the
+		// parent_id; for top-level comments (parent_id IS NULL), use the id itself.
+		const parentId = (row.parentId as number | null) ?? null;
+		const threadCommentId = parentId ?? commentId;
+
+		return {
+			author,
+			commentText: row.commentText as string,
+			threadCommentId,
 			thingId: (row.thingId as number | null) ?? null,
 			sectionIdentifier: (row.sectionIdentifier as string | null) ?? null,
 			positionInSection: (row.positionInSection as number | null) ?? null,

@@ -3,8 +3,13 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { MySQLPromisePool } from '@fastify/mysql';
 import { authPlugin } from '../auth/auth.js';
+import { authNotifierPlugin } from '../authNotifier/authNotifier.js';
 import { commentsPlugin } from './comments.js';
 import { signAccessToken } from '../auth/jwt.js';
+
+vi.mock('../../lib/email.js', () => ({
+	sendEmail: vi.fn().mockResolvedValue(undefined),
+}));
 
 const JWT_SECRET = 'test-jwt-secret-that-is-at-least-32-characters-long';
 const secret = new TextEncoder().encode(JWT_SECRET);
@@ -15,6 +20,7 @@ beforeEach(() => {
 	vi.stubEnv('JWT_REFRESH_TOKEN_TTL', '2592000');
 	vi.stubEnv('ACTIVATION_KEY_TTL', '86400');
 	vi.stubEnv('RESET_KEY_TTL', '3600');
+	vi.stubEnv('ALLOWED_ORIGINS', 'https://poetry.mellonis.ru');
 });
 
 // listComments runs multiple queries on one connection, so the mock advances
@@ -41,6 +47,7 @@ async function buildApp(mysql: MySQLPromisePool) {
 	app.setSerializerCompiler(serializerCompiler);
 	app.decorate('mysql', mysql);
 	app.register(authPlugin);
+	app.register(authNotifierPlugin);
 	app.register(commentsPlugin, { prefix: '/comments' });
 	return app;
 }
@@ -256,6 +263,97 @@ describe('PUT /comments/:commentId/vote', () => {
 			payload: { vote: 'like' },
 		});
 		expect(response.statusCode).toBe(409);
+	});
+
+	it('sends a vote notification email when voter is not the comment author', async () => {
+		const { sendEmail } = await import('../../lib/email.js');
+		vi.mocked(sendEmail).mockClear();
+
+		// meta (authorId=2, not the voter sub=1), upsert, voteContext, voteCounts, userVote
+		const mysql = createMockMysql(
+			[{ id: 10, userId: 2, thingId: 5, parentId: null, statusId: 1, createdAt: new Date() }],
+			[],
+			[{
+				authorUserId: 2,
+				thingId: 5,
+				parentId: null,
+				commentText: 'some comment text',
+				authorLogin: 'author',
+				authorEmail: 'author@example.com',
+				authorUserRights: 24,
+				authorGroupRights: 0,
+				sectionIdentifier: 'poems',
+				positionInSection: 3,
+			}],
+			[{ likes: 1, dislikes: 0 }],
+			[{ vote: 1 }],
+		);
+		const app = await buildApp(mysql);
+		const token = await buildToken({ sub: 1 });
+
+		const response = await app.inject({
+			method: 'PUT',
+			url: '/comments/10/vote',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { vote: 'like' },
+		});
+
+		expect(response.statusCode).toBe(200);
+		// Allow the fire-and-forget promise to settle
+		await new Promise((r) => setImmediate(r));
+		expect(sendEmail).toHaveBeenCalledOnce();
+	});
+
+	it('does not send a notification email on self-vote', async () => {
+		const { sendEmail } = await import('../../lib/email.js');
+		vi.mocked(sendEmail).mockClear();
+
+		// meta (authorId=1, same as voter sub=1), upsert, voteCounts, userVote
+		const mysql = createMockMysql(
+			[{ id: 10, userId: 1, thingId: 5, parentId: null, statusId: 1, createdAt: new Date() }],
+			[],
+			[{ likes: 1, dislikes: 0 }],
+			[{ vote: 1 }],
+		);
+		const app = await buildApp(mysql);
+		const token = await buildToken({ sub: 1 });
+
+		const response = await app.inject({
+			method: 'PUT',
+			url: '/comments/10/vote',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { vote: 'like' },
+		});
+
+		expect(response.statusCode).toBe(200);
+		await new Promise((r) => setImmediate(r));
+		expect(sendEmail).not.toHaveBeenCalled();
+	});
+
+	it('does not send a notification email on vote removal', async () => {
+		const { sendEmail } = await import('../../lib/email.js');
+		vi.mocked(sendEmail).mockClear();
+
+		// meta (authorId=2), deleteVote, voteCounts, userVote
+		const mysql = createMockMysql(
+			[{ id: 10, userId: 2, thingId: 5, parentId: null, statusId: 1, createdAt: new Date() }],
+			[],
+			[{ likes: 0, dislikes: 0 }],
+			[],
+		);
+		const app = await buildApp(mysql);
+		const token = await buildToken({ sub: 1 });
+
+		const response = await app.inject({
+			method: 'PUT',
+			url: '/comments/10/vote',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { vote: null },
+		});
+
+		expect(response.statusCode).toBe(200);
+		await new Promise((r) => setImmediate(r));
+		expect(sendEmail).not.toHaveBeenCalled();
 	});
 });
 

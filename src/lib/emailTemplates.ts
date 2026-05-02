@@ -142,6 +142,26 @@ padding:12px 30px;border-radius:5px;text-decoration:none;font-size:14px;">
 <a href="${threadHref}" style="color:#666;">${threadHref}</a></p>`),
 });
 
+export const commentVoteEmail = (
+	siteOrigin: string,
+	recipientLogin: string,
+	vote: 1 | -1,
+	commentText: string,
+	threadHref: string,
+): EmailMessage => ({
+	subject: vote === 1 ? 'Ваш комментарий оценили: лайк' : 'Ваш комментарий оценили: дизлайк',
+	html: layout(siteOrigin, recipientLogin, `<p style="color:#333;font-size:14px;">Ваш комментарий получил ${vote === 1 ? 'лайк 👍' : 'дизлайк 👎'}:</p>
+<blockquote style="margin:15px 0;padding:10px 15px;background:#f7f7f7;
+border-left:3px solid #999;color:#333;font-size:14px;
+white-space:pre-wrap;">${escapeHtml(commentText)}</blockquote>
+<p style="text-align:center;margin:25px 0;">
+<a href="${threadHref}" style="display:inline-block;background:#333;color:#fff;
+padding:12px 30px;border-radius:5px;text-decoration:none;font-size:14px;">
+Перейти к обсуждению</a></p>
+<p style="color:#999;font-size:12px;">Или скопируйте ссылку:
+<a href="${threadHref}" style="color:#666;">${threadHref}</a></p>`),
+});
+
 export const passwordChangedEmail = (siteOrigin: string, login: string, resetHref: string): EmailMessage => ({
 	subject: 'Пароль изменён',
 	html: layout(siteOrigin, login, `<p style="color:#333;font-size:14px;">Пароль для вашего
