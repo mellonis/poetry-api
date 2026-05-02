@@ -1,0 +1,36 @@
+name: Cleanup old container images
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Delete versions older than 10 days, keep latest
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const packageName = context.repo.repo;
+            const cutoffMs = 10 * 24 * 60 * 60 * 1000;
+            const versions = await github.paginate(
+              github.rest.packages.getAllPackageVersionsForPackageOwnedByUser,
+              { package_type: 'container', package_name: packageName, username: context.repo.owner }
+            );
+            versions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const toDelete = versions.slice(1).filter(
+              v => Date.now() - new Date(v.created_at).getTime() > cutoffMs
+            );
+            for (const v of toDelete) {
+              await github.rest.packages.deletePackageVersionForUser({
+                package_type: 'container',
+                package_name: packageName,
+                username: context.repo.owner,
+                version_id: v.id,
+              });
+            }
+            core.info(`Deleted ${toDelete.length} of ${versions.length} versions`);
