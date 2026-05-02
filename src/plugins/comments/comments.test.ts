@@ -282,6 +282,7 @@ describe('PUT /comments/:commentId/vote', () => {
 				authorEmail: 'author@example.com',
 				authorUserRights: 24,
 				authorGroupRights: 0,
+				authorNotifyOnVote: 1,
 				sectionIdentifier: 'poems',
 				positionInSection: 3,
 			}],

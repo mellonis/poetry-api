@@ -183,7 +183,12 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			// the parent shows the new reply under it in single-thread mode.
 			if (parentId !== null) {
 				const ctx = await getCommentReplyContext(fastify.mysql, parentId);
-				if (ctx?.parentAuthor && ctx.parentAuthor.userId !== userId && !ctx.parentAuthor.isBanned) {
+				if (
+					ctx?.parentAuthor &&
+					ctx.parentAuthor.userId !== userId &&
+					!ctx.parentAuthor.isBanned &&
+					ctx.parentAuthor.notifyAuthorOnCommentReply
+				) {
 					const recipient = ctx.parentAuthor;
 					const replierLogin = request.user!.login;
 					const siteOrigin = fastify.resolveOrigin(request);
@@ -310,7 +315,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 				// the comment author) and votes on comments by deleted users.
 				if (meta.userId !== null && meta.userId !== userId) {
 					const ctx = await getCommentVoteContext(fastify.mysql, commentId);
-					if (ctx?.author && !ctx.author.isBanned) {
+					if (ctx?.author && !ctx.author.isBanned && ctx.author.notifyAuthorOnCommentVote) {
 						const siteOrigin = fastify.resolveOrigin(request);
 						const threadHref = buildThreadHref(siteOrigin, ctx, ctx.threadCommentId);
 						sendEmail(

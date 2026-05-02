@@ -15,3 +15,15 @@ export const deleteUserQuery = `
 	FROM auth_user
 	WHERE id = ?
 `;
+
+export const getNotificationSettingsQuery = `
+	SELECT notify_author_on_comment_reply, notify_author_on_comment_vote
+	FROM auth_user
+	WHERE id = ?
+`;
+
+export const updateNotificationSettingsQuery = `
+	UPDATE auth_user
+	SET notify_author_on_comment_reply = ?, notify_author_on_comment_vote = ?
+	WHERE id = ?
+`;

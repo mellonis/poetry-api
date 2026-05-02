@@ -4,6 +4,8 @@ import {
 	getUserPasswordAndEmailQuery,
 	updatePasswordQuery,
 	deleteUserQuery,
+	getNotificationSettingsQuery,
+	updateNotificationSettingsQuery,
 } from './queries.js';
 
 export interface UserCredentials {
@@ -28,5 +30,37 @@ export const updatePassword = async (mysql: MySQLPromisePool, userId: number, pa
 export const deleteUser = async (mysql: MySQLPromisePool, userId: number): Promise<void> => {
 	await withConnection(mysql, async (connection) => {
 		await connection.query(deleteUserQuery, [userId]);
+	});
+};
+
+export interface NotificationSettings {
+	notifyAuthorOnCommentReply: boolean;
+	notifyAuthorOnCommentVote: boolean;
+}
+
+export const getNotificationSettings = async (
+	mysql: MySQLPromisePool,
+	userId: number,
+): Promise<NotificationSettings | null> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(getNotificationSettingsQuery, [userId]);
+		if (!rows[0]) return null;
+		return {
+			notifyAuthorOnCommentReply: rows[0].notify_author_on_comment_reply === 1,
+			notifyAuthorOnCommentVote: rows[0].notify_author_on_comment_vote === 1,
+		};
+	});
+
+export const updateNotificationSettings = async (
+	mysql: MySQLPromisePool,
+	userId: number,
+	settings: NotificationSettings,
+): Promise<void> => {
+	await withConnection(mysql, async (connection) => {
+		await connection.query(updateNotificationSettingsQuery, [
+			settings.notifyAuthorOnCommentReply ? 1 : 0,
+			settings.notifyAuthorOnCommentVote ? 1 : 0,
+			userId,
+		]);
 	});
 };

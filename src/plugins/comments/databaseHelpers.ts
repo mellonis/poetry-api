@@ -182,6 +182,7 @@ export interface CommentReplyContext {
 			login: string;
 			email: string;
 			isBanned: boolean;
+			notifyAuthorOnCommentReply: boolean;
 		}
 		| null;
 	thingId: number | null;
@@ -211,6 +212,7 @@ export const getCommentReplyContext = async (
 				login: row.authorLogin as string,
 				email: row.authorEmail as string,
 				isBanned: banned,
+				notifyAuthorOnCommentReply: (row.authorNotifyOnReply as number) === 1,
 			}
 			: null;
 
@@ -229,6 +231,7 @@ export interface CommentVoteContext {
 			login: string;
 			email: string;
 			isBanned: boolean;
+			notifyAuthorOnCommentVote: boolean;
 		}
 		| null;
 	commentText: string;
@@ -262,6 +265,7 @@ export const getCommentVoteContext = async (
 				login: row.authorLogin as string,
 				email: row.authorEmail as string,
 				isBanned: banned,
+				notifyAuthorOnCommentVote: (row.authorNotifyOnVote as number) === 1,
 			}
 			: null;
 

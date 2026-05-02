@@ -5,15 +5,18 @@ import { sendEmail } from '../../lib/email.js';
 import { accountDeletedEmail } from '../../lib/emailTemplates.js';
 import { checkPassword, hashPassword } from '../auth/password.js';
 import { deleteAllUserRefreshTokens } from '../auth/databaseHelpers.js';
-import { getUserCredentials, updatePassword, deleteUser } from './databaseHelpers.js';
+import { getUserCredentials, updatePassword, deleteUser, getNotificationSettings, updateNotificationSettings } from './databaseHelpers.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import {
 	userIdParam,
 	changePasswordRequest,
 	deleteUserRequest,
+	notificationSettingsResponse,
+	updateNotificationSettingsRequest,
 	type UserIdParam,
 	type ChangePasswordRequest,
 	type DeleteUserRequest,
+	type UpdateNotificationSettingsRequest,
 } from './schemas.js';
 
 export async function usersPlugin(fastify: FastifyInstance) {
@@ -127,6 +130,84 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				}
 
 				return reply.code(204).send();
+			} catch (error) {
+				request.log.error(error);
+				return reply.code(500).send({ error: 'Internal server error' });
+			}
+		},
+	});
+
+	fastify.get('/:userId/notification-settings', {
+		schema: {
+			description: 'Get notification preferences for the authenticated user.',
+			tags: ['Users'],
+			params: userIdParam,
+			response: {
+				200: notificationSettingsResponse,
+				403: authErrorResponse,
+				404: authErrorResponse,
+				500: errorResponse,
+			},
+		},
+		handler: async (request: FastifyRequest<{ Params: UserIdParam }>, reply) => {
+			try {
+				const { userId } = request.params;
+				const user = request.user!;
+
+				if (user.sub !== userId) {
+					return reply.code(403).send({ error: 'forbidden', message: 'Cannot read another user\'s notification settings' });
+				}
+
+				const settings = await getNotificationSettings(fastify.mysql, userId);
+
+				if (!settings) {
+					return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
+				}
+
+				return settings;
+			} catch (error) {
+				request.log.error(error);
+				return reply.code(500).send({ error: 'Internal server error' });
+			}
+		},
+	});
+
+	fastify.put('/:userId/notification-settings', {
+		schema: {
+			description: 'Update notification preferences for the authenticated user.',
+			tags: ['Users'],
+			params: userIdParam,
+			body: updateNotificationSettingsRequest,
+			response: {
+				200: notificationSettingsResponse,
+				403: authErrorResponse,
+				404: authErrorResponse,
+				500: errorResponse,
+			},
+		},
+		handler: async (
+			request: FastifyRequest<{ Params: UserIdParam; Body: UpdateNotificationSettingsRequest }>,
+			reply,
+		) => {
+			try {
+				const { userId } = request.params;
+				const user = request.user!;
+
+				if (user.sub !== userId) {
+					return reply.code(403).send({ error: 'forbidden', message: 'Cannot update another user\'s notification settings' });
+				}
+
+				const existing = await getNotificationSettings(fastify.mysql, userId);
+
+				if (!existing) {
+					return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
+				}
+
+				const { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote } = request.body;
+				await updateNotificationSettings(fastify.mysql, userId, { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote });
+				request.log.info({ userId }, 'Notification settings updated');
+
+				return { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote };
 			} catch (error) {
 				request.log.error(error);
 				return reply.code(500).send({ error: 'Internal server error' });

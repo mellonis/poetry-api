@@ -138,6 +138,7 @@ export const commentReplyContextQuery = `
     u.email       AS authorEmail,
     u.rights      AS authorUserRights,
     g.rights      AS authorGroupRights,
+    u.notify_author_on_comment_reply AS authorNotifyOnReply,
     s.identifier               AS sectionIdentifier,
     ti.thing_position_in_section AS positionInSection
   FROM comment pc
@@ -162,6 +163,7 @@ export const commentVoteContextQuery = `
     u.email       AS authorEmail,
     u.rights      AS authorUserRights,
     g.rights      AS authorGroupRights,
+    u.notify_author_on_comment_vote AS authorNotifyOnVote,
     s.identifier               AS sectionIdentifier,
     ti.thing_position_in_section AS positionInSection
   FROM comment c
