@@ -149,6 +149,30 @@ export const commentReplyContextQuery = `
   LIMIT 1
 `;
 
+// Lookup for vote notifications: same as reply context but also returns the
+// voted comment's text (for the email excerpt) and parent_id (to derive the
+// top-level thread id — top-level comment → own id; reply → parent_id).
+export const commentVoteContextQuery = `
+  SELECT
+    c.r_user_id   AS authorUserId,
+    c.r_thing_id  AS thingId,
+    c.parent_id   AS parentId,
+    c.text        AS commentText,
+    u.login       AS authorLogin,
+    u.email       AS authorEmail,
+    u.rights      AS authorUserRights,
+    g.rights      AS authorGroupRights,
+    s.identifier               AS sectionIdentifier,
+    ti.thing_position_in_section AS positionInSection
+  FROM comment c
+  LEFT JOIN auth_user u  ON u.id = c.r_user_id
+  LEFT JOIN auth_group g ON g.id = u.r_group_id
+  LEFT JOIN thing_identifier ti ON ti.r_thing_id = c.r_thing_id
+  LEFT JOIN section s    ON s.id = ti.r_section_id
+  WHERE c.id = ?
+  LIMIT 1
+`;
+
 export const repliesByParentIdQuery = `
   SELECT ${commentRowFields}
   FROM comment c

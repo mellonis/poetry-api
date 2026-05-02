@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { errorResponse } from '../../lib/schemas.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import { sendEmail } from '../../lib/email.js';
-import { commentReportedEmail, commentReplyEmail } from '../../lib/emailTemplates.js';
+import { commentReportedEmail, commentReplyEmail, commentVoteEmail } from '../../lib/emailTemplates.js';
 import { voteValueToDb } from '../../lib/voteValue.js';
 import { sanitizeCommentText } from './sanitizeCommentText.js';
 import {
@@ -11,6 +11,7 @@ import {
 	getCommentMeta,
 	getRepliesForTopLevel,
 	getCommentReplyContext,
+	getCommentVoteContext,
 	createComment,
 	updateCommentText,
 	setCommentStatus,
@@ -18,7 +19,6 @@ import {
 	deleteCommentVote,
 	getCommentVoteSummary,
 	reportComment,
-	type CommentReplyContext,
 } from './databaseHelpers.js';
 import {
 	commentParams,
@@ -53,7 +53,12 @@ const REPORT_RATE_LIMIT = { max: 1, timeWindow: '5 minutes' };
 
 // nextjs is configured without trailing slashes — paths end at the last
 // segment, query starts at `?`. Only the bare root `/` keeps its slash.
-const buildThreadHref = (siteOrigin: string, ctx: CommentReplyContext, threadCommentId: number): string => {
+interface ThreadLinkContext {
+	thingId: number | null;
+	sectionIdentifier: string | null;
+	positionInSection: number | null;
+}
+const buildThreadHref = (siteOrigin: string, ctx: ThreadLinkContext, threadCommentId: number): string => {
 	if (ctx.thingId === null) {
 		return `${siteOrigin}/guestbook?thread=${threadCommentId}`;
 	}
@@ -300,6 +305,21 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			} else {
 				await upsertCommentVote(fastify.mysql, commentId, userId, dbVote);
 				request.log.info({ commentId, userId, vote }, 'Comment vote recorded');
+
+				// Vote notification: fire-and-forget. Skip self-votes (meta.userId is
+				// the comment author) and votes on comments by deleted users.
+				if (meta.userId !== null && meta.userId !== userId) {
+					const ctx = await getCommentVoteContext(fastify.mysql, commentId);
+					if (ctx?.author && !ctx.author.isBanned) {
+						const siteOrigin = fastify.resolveOrigin(request);
+						const threadHref = buildThreadHref(siteOrigin, ctx, ctx.threadCommentId);
+						sendEmail(
+							ctx.author.email,
+							commentVoteEmail(siteOrigin, ctx.author.login, dbVote, ctx.commentText, threadHref),
+						).catch((err) => request.log.warn(err, 'Comment-vote notification email failed'));
+						request.log.info({ commentId, recipientUserId: meta.userId }, 'Comment-vote notification email sent');
+					}
+				}
 			}
 
 			return await getCommentVoteSummary(fastify.mysql, commentId, userId);
