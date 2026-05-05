@@ -133,10 +133,13 @@ describe('GET /comments', () => {
 });
 
 describe('GET /comments/:commentId', () => {
-	it('bundles replies for a top-level comment (single-thread shape)', async () => {
+	const sectionCtx = [{ sectionIdentifier: 'spring-cycle', positionInSection: 7 }];
+
+	it('bundles replies for a top-level comment with section context for the deep link', async () => {
 		const top = { ...visibleRow, parentId: null, hasVisibleChild: 1 };
 		const reply = { ...visibleRow, id: 11, parentId: 10, hasVisibleChild: 0 };
-		const mysql = createMockMysql([top], [reply]);
+		// Query order: commentByIdQuery → thingSectionContextQuery → repliesByParentIdQuery
+		const mysql = createMockMysql([top], sectionCtx, [reply]);
 		const app = await buildApp(mysql);
 
 		const response = await app.inject({ method: 'GET', url: '/comments/10' });
@@ -145,11 +148,14 @@ describe('GET /comments/:commentId', () => {
 		expect(body.id).toBe(10);
 		expect(body.replies).toHaveLength(1);
 		expect(body.replies[0].id).toBe(11);
+		expect(body.sectionIdentifier).toBe('spring-cycle');
+		expect(body.positionInSection).toBe(7);
 	});
 
-	it('returns a reply without bundling further replies (one-level threading)', async () => {
+	it('returns a reply with section context (same thing, same deep-link target)', async () => {
 		const reply = { ...visibleRow, id: 11, parentId: 10, hasVisibleChild: 0 };
-		const mysql = createMockMysql([reply]);
+		// Query order: commentByIdQuery → thingSectionContextQuery (no replies fetch)
+		const mysql = createMockMysql([reply], sectionCtx);
 		const app = await buildApp(mysql);
 
 		const response = await app.inject({ method: 'GET', url: '/comments/11' });
@@ -158,6 +164,35 @@ describe('GET /comments/:commentId', () => {
 		expect(body.id).toBe(11);
 		expect(body.parentId).toBe(10);
 		expect(body.replies).toBeUndefined();
+		expect(body.sectionIdentifier).toBe('spring-cycle');
+		expect(body.positionInSection).toBe(7);
+	});
+
+	it('returns null section context for a guestbook comment (thingId IS NULL)', async () => {
+		const top = { ...visibleRow, thingId: null, parentId: null, hasVisibleChild: 0 };
+		// thingId is null → thingSectionContextQuery is skipped → only repliesByParentIdQuery runs.
+		const mysql = createMockMysql([top], []);
+		const app = await buildApp(mysql);
+
+		const response = await app.inject({ method: 'GET', url: '/comments/10' });
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body.thingId).toBeNull();
+		expect(body.sectionIdentifier).toBeNull();
+		expect(body.positionInSection).toBeNull();
+	});
+
+	it('returns null section context when the thing is in zero sections', async () => {
+		const top = { ...visibleRow, parentId: null, hasVisibleChild: 0 };
+		// thingSectionContextQuery returns no rows (LIMIT 1 query found nothing).
+		const mysql = createMockMysql([top], [], []);
+		const app = await buildApp(mysql);
+
+		const response = await app.inject({ method: 'GET', url: '/comments/10' });
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body.sectionIdentifier).toBeNull();
+		expect(body.positionInSection).toBeNull();
 	});
 
 	it('returns 404 for unknown id', async () => {

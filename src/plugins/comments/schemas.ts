@@ -44,6 +44,16 @@ const commentWithRepliesSchema = commentBaseSchema.extend({
 	replies: z.optional(z.array(commentBaseSchema)),
 });
 
+// Response for GET /comments/:commentId. Adds a deterministic
+// (sectionIdentifier, positionInSection) pair for thing-comments so callers
+// (the CMS thread page) can build a /sections/<id>/<pos>?thread=N deep link
+// without a second round-trip. Both null for guestbook entries (thingId IS
+// NULL) and for things not yet attached to any section.
+const commentSingleSchema = commentWithRepliesSchema.extend({
+	sectionIdentifier: z.string().nullable(),
+	positionInSection: z.number().int().positive().nullable(),
+});
+
 const commentListQuery = z.object({
 	thingId: z.optional(z.coerce.number().int().positive()),
 	scope: z.optional(z.enum(['site', 'thing'])),
@@ -109,6 +119,7 @@ export {
 	commentParams,
 	commentBaseSchema,
 	commentWithRepliesSchema,
+	commentSingleSchema,
 	commentListQuery,
 	commentListResponse,
 	createCommentRequest,

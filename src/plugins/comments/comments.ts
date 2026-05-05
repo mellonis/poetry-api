@@ -13,6 +13,7 @@ import {
 	getRepliesForTopLevel,
 	getCommentReplyContext,
 	getCommentVoteContext,
+	getThingSectionContext,
 	createComment,
 	updateCommentText,
 	setCommentStatus,
@@ -26,6 +27,7 @@ import {
 	commentListQuery,
 	commentListResponse,
 	commentWithRepliesSchema,
+	commentSingleSchema,
 	createCommentRequest,
 	updateCommentRequest,
 	voteCommentRequest,
@@ -107,11 +109,11 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 
 	fastify.get('/:commentId', {
 		schema: {
-			description: 'Fetch a single comment by id. Top-level rows include their replies (single-thread view); reply rows are returned bare.',
+			description: 'Fetch a single comment by id. Top-level rows include their replies (single-thread view); reply rows are returned bare. Response carries one (sectionIdentifier, positionInSection) pair for thing-comments — chosen deterministically when the thing lives in multiple sections — so callers can build a /sections/<id>/<pos>?thread=N deep link without a second round-trip; both null for guestbook entries.',
 			tags: ['Comments'],
 			params: commentParams,
 			response: {
-				200: commentWithRepliesSchema,
+				200: commentSingleSchema,
 				404: errorResponse,
 				500: errorResponse,
 			},
@@ -122,12 +124,18 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			const comment = await getCommentById(fastify.mysql, request.params.commentId, userId);
 			if (!comment) return reply.code(404).send(errorBody('not_found'));
 
+			const sectionCtx = comment.thingId !== null
+				? await getThingSectionContext(fastify.mysql, comment.thingId)
+				: null;
+			const sectionIdentifier = sectionCtx?.sectionIdentifier ?? null;
+			const positionInSection = sectionCtx?.positionInSection ?? null;
+
 			if (comment.parentId === null) {
 				const replies = await getRepliesForTopLevel(fastify.mysql, comment.id, userId);
-				return { ...comment, replies };
+				return { ...comment, replies, sectionIdentifier, positionInSection };
 			}
 
-			return comment;
+			return { ...comment, sectionIdentifier, positionInSection };
 		},
 	});
 

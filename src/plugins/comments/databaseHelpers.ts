@@ -10,6 +10,7 @@ import {
 	commentByIdQuery,
 	commentMetaByIdQuery,
 	commentReplyContextQuery,
+	thingSectionContextQuery,
 	commentVoteContextQuery,
 	insertCommentQuery,
 	updateCommentTextQuery,
@@ -160,6 +161,29 @@ export const getCommentById = async (
 		if (!row) return null;
 		if (row.statusId !== COMMENT_STATUS.visible && row.hasVisibleChild !== 1) return null;
 		return projectRow(row);
+	});
+
+export interface ThingSectionContext {
+	sectionIdentifier: string;
+	positionInSection: number;
+}
+
+// Returns one (sectionIdentifier, positionInSection) pair for the thing — null
+// when the thing is in zero sections (shouldn't happen for published things,
+// possible for unpublished). The Comments widget keys by thingId, so any
+// section URL renders the same thread.
+export const getThingSectionContext = async (
+	mysql: MySQLPromisePool,
+	thingId: number,
+): Promise<ThingSectionContext | null> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(thingSectionContextQuery, [thingId]);
+		const row = rows[0];
+		if (!row) return null;
+		return {
+			sectionIdentifier: row.sectionIdentifier as string,
+			positionInSection: row.positionInSection as number,
+		};
 	});
 
 // Fetch all visible replies for a top-level comment. Replies that are not
