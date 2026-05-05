@@ -448,6 +448,8 @@ export const listCommentsForCms = async (
 				thingFirstLines: (r.thingFirstLines as string | null) ?? null,
 				userId: r.userId as number | null,
 				authorLogin: r.authorLogin as string | null,
+				authorDisplayName: r.authorDisplayName as string | null,
+				isAuthor: Boolean(r.isAuthor),
 				text: r.text as string,
 				statusId: r.statusId as number,
 				createdAt: toIso(r.createdAt as Date),
