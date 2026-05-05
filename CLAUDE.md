@@ -44,6 +44,7 @@ SMTP_FROM_ADDRESS=notifier@mellonis.ru   # required, email address for From head
 ALLOWED_ORIGINS=https://poetry.mellonis.ru,https://old2.poetry.mellonis.ru  # required, comma-separated whitelist of client origins (CORS + email links)
 WEBAUTHN_RP_ID=poetry.mellonis.ru       # optional, WebAuthn Relying Party ID (default: poetry.mellonis.ru, use "localhost" for local dev)
 ADMIN_NOTIFY_EMAIL=admin@mellonis.ru  # optional, receives notifications on votes, registrations, account deletions, comment reports
+SITE_AUTHOR_USER_ID=1                 # optional, auth_user.id of the human site owner. Comments by this user get isAuthor=true (rendered as the «Автор сайта» badge in the UI / reply emails). Decoupled from the workspace's "root admin id=1" convention since the site owner may post under a different account. Default 1.
 MEILI_URL=http://poetry-meilisearch:7700  # optional, Meilisearch host (default: http://poetry-meilisearch:7700)
 MEILI_MASTER_KEY=<key>               # optional (required for search to work), shared with Meilisearch container
 LOG_HMAC_KEY_CURRENT=<32-byte hex>      # required, HMAC key for actorFingerprint() log helper. In prod, written by the VPS rotation script (see mellonis/poetry docs/superpowers/specs/2026-05-05-privacy-safe-logging-design.md). In dev, any non-empty string works.
