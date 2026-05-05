@@ -5,19 +5,23 @@ import { sendEmail } from '../../lib/email.js';
 import { accountDeletedEmail } from '../../lib/emailTemplates.js';
 import { checkPassword, hashPassword } from '../auth/password.js';
 import { deleteAllUserRefreshTokens } from '../auth/databaseHelpers.js';
-import { getUserCredentials, updatePassword, deleteUser, getNotificationSettings, updateNotificationSettings } from './databaseHelpers.js';
+import { getUserCredentials, updatePassword, deleteUser, getNotificationSettings, updateNotificationSettings, getDisplayName, setDisplayName, isReservedDisplayName } from './databaseHelpers.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import { actorFingerprint } from '../../lib/actorFingerprint.js';
+import { validateDisplayName } from '../../lib/displayName.js';
 import {
 	userIdParam,
 	changePasswordRequest,
 	deleteUserRequest,
 	notificationSettingsResponse,
 	updateNotificationSettingsRequest,
+	displayNameResponse,
+	updateDisplayNameRequest,
 	type UserIdParam,
 	type ChangePasswordRequest,
 	type DeleteUserRequest,
 	type UpdateNotificationSettingsRequest,
+	type UpdateDisplayNameRequest,
 } from './schemas.js';
 
 export async function usersPlugin(fastify: FastifyInstance) {
@@ -209,6 +213,93 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Notification settings updated');
 
 				return { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote };
+			} catch (error) {
+				request.log.error(error);
+				return reply.code(500).send({ error: 'Internal server error' });
+			}
+		},
+	});
+
+	fastify.get('/:userId/display-name', {
+		schema: {
+			description: 'Get display name for the authenticated user.',
+			tags: ['Users'],
+			params: userIdParam,
+			response: {
+				200: displayNameResponse,
+				403: authErrorResponse,
+				404: authErrorResponse,
+				500: errorResponse,
+			},
+		},
+		handler: async (request: FastifyRequest<{ Params: UserIdParam }>, reply) => {
+			try {
+				const { userId } = request.params;
+				if (request.user!.sub !== userId) {
+					return reply.code(403).send({ error: 'forbidden', message: 'Cannot read another user\'s display name' });
+				}
+				const info = await getDisplayName(fastify.mysql, userId);
+				if (!info) return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
+				return {
+					displayName: info.displayName,
+					displayNameChangedAt: info.displayNameChangedAt?.toISOString() ?? null,
+				};
+			} catch (error) {
+				request.log.error(error);
+				return reply.code(500).send({ error: 'Internal server error' });
+			}
+		},
+	});
+
+	const DISPLAY_NAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
+	fastify.put('/:userId/display-name', {
+		schema: {
+			description: 'Update display name for the authenticated user. Rate-limited to once per 7 days.',
+			tags: ['Users'],
+			params: userIdParam,
+			body: updateDisplayNameRequest,
+			response: {
+				200: displayNameResponse,
+				400: errorResponse,
+				403: authErrorResponse,
+				404: authErrorResponse,
+				409: errorResponse,
+				429: errorResponse,
+				500: errorResponse,
+			},
+		},
+		handler: async (
+			request: FastifyRequest<{ Params: UserIdParam; Body: UpdateDisplayNameRequest }>,
+			reply,
+		) => {
+			try {
+				const { userId } = request.params;
+				if (request.user!.sub !== userId) {
+					return reply.code(403).send({ error: 'forbidden', message: 'Cannot change another user\'s display name' });
+				}
+
+				const result = validateDisplayName(request.body.displayName);
+				if (!result.ok) return reply.code(400).send({ error: result.error });
+
+				const info = await getDisplayName(fastify.mysql, userId);
+				if (!info) return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
+
+				if (info.displayNameChangedAt && Date.now() - info.displayNameChangedAt.getTime() < DISPLAY_NAME_COOLDOWN_MS) {
+					return reply.code(429).send({ error: 'display_name_cooldown', message: 'Display name can only be changed once per 7 days' });
+				}
+
+				const reserved = await isReservedDisplayName(fastify.mysql, result.value);
+				if (reserved) {
+					return reply.code(409).send({ error: 'display_name_reserved', message: 'This display name is not available' });
+				}
+
+				await setDisplayName(fastify.mysql, userId, result.value);
+				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Display name updated');
+				return {
+					displayName: result.value,
+					displayNameChangedAt: new Date().toISOString(),
+				};
 			} catch (error) {
 				request.log.error(error);
 				return reply.code(500).send({ error: 'Internal server error' });

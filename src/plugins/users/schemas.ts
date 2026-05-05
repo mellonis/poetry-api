@@ -28,3 +28,15 @@ export type ChangePasswordRequest = z.infer<typeof changePasswordRequest>;
 export type DeleteUserRequest = z.infer<typeof deleteUserRequest>;
 export type NotificationSettingsResponse = z.infer<typeof notificationSettingsResponse>;
 export type UpdateNotificationSettingsRequest = z.infer<typeof updateNotificationSettingsRequest>;
+
+export const displayNameResponse = z.object({
+	displayName: z.string().nullable(),
+	displayNameChangedAt: z.string().nullable(),
+});
+
+export const updateDisplayNameRequest = z.object({
+	displayName: z.string(),
+});
+
+export type DisplayNameResponse = z.infer<typeof displayNameResponse>;
+export type UpdateDisplayNameRequest = z.infer<typeof updateDisplayNameRequest>;

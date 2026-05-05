@@ -144,7 +144,7 @@ export const createUser = async (
 	withConnection(mysql, async (connection) => {
 		const [result] = await connection.query<MySQLResultSetHeader>(
 			insertUserQuery,
-			[groupId, rights, login, passwordHash, email, hashKey(key)],
+			[groupId, rights, login, passwordHash, email, hashKey(key), login],
 		);
 		return result.insertId;
 	});

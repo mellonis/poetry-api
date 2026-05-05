@@ -5,7 +5,8 @@ const commentRowFields = `
   c.parent_id AS parentId,
   c.r_thing_id AS thingId,
   c.r_user_id AS userId,
-  u.login AS authorLogin,
+  c.display_name_snapshot AS authorDisplayName,
+  (c.r_user_id = 1) AS isAuthor,
   c.text,
   c.r_comment_status_id AS statusId,
   c.created_at AS createdAt,
@@ -26,7 +27,6 @@ export const topLevelCommentsQuery = `
       WHERE c2.parent_id = c.id AND c2.r_comment_status_id = 1
     ) AS hasVisibleChild
   FROM comment c
-  LEFT JOIN auth_user u ON u.id = c.r_user_id
   LEFT JOIN comment_vote cv ON cv.r_comment_id = c.id
   WHERE c.parent_id IS NULL AND c.r_thing_id <=> ?
   GROUP BY c.id
@@ -37,7 +37,6 @@ export const topLevelCommentsQuery = `
 export const repliesByParentIdsQuery = `
   SELECT ${commentRowFields}
   FROM comment c
-  LEFT JOIN auth_user u ON u.id = c.r_user_id
   LEFT JOIN comment_vote cv ON cv.r_comment_id = c.id
   WHERE c.parent_id IN (?)
   GROUP BY c.id
@@ -62,7 +61,6 @@ export const commentByIdQuery = `
       WHERE c2.parent_id = c.id AND c2.r_comment_status_id = 1
     ) AS hasVisibleChild
   FROM comment c
-  LEFT JOIN auth_user u ON u.id = c.r_user_id
   LEFT JOIN comment_vote cv ON cv.r_comment_id = c.id
   WHERE c.id = ?
   GROUP BY c.id
@@ -85,8 +83,9 @@ export const commentMetaByIdQuery = `
 export const insertCommentQuery = `
   INSERT INTO comment
     (r_user_id, r_thing_id, parent_id, text, r_comment_status_id,
-     status_changed_at, status_changed_by_user_id)
-  VALUES (?, ?, ?, ?, 1, NOW(), ?)
+     status_changed_at, status_changed_by_user_id, display_name_snapshot)
+  VALUES (?, ?, ?, ?, 1, NOW(), ?,
+    (SELECT COALESCE(display_name, login) FROM auth_user WHERE id = ?))
 `;
 
 export const updateCommentTextQuery = `
@@ -178,7 +177,6 @@ export const commentVoteContextQuery = `
 export const repliesByParentIdQuery = `
   SELECT ${commentRowFields}
   FROM comment c
-  LEFT JOIN auth_user u ON u.id = c.r_user_id
   LEFT JOIN comment_vote cv ON cv.r_comment_id = c.id
   WHERE c.parent_id = ?
   GROUP BY c.id
@@ -206,6 +204,8 @@ const cmsCommentRowFields = `
   t.first_lines AS thingFirstLines,
   c.r_user_id AS userId,
   u.login AS authorLogin,
+  c.display_name_snapshot AS authorDisplayName,
+  (c.r_user_id = 1) AS isAuthor,
   c.text,
   c.r_comment_status_id AS statusId,
   c.created_at AS createdAt,

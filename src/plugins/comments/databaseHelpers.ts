@@ -39,7 +39,8 @@ interface RawCommentRow {
 	parentId: number | null;
 	thingId: number | null;
 	userId: number | null;
-	authorLogin: string | null;
+	authorDisplayName: string | null;
+	isAuthor: number; // 0 | 1 from MySQL
 	text: string;
 	statusId: number;
 	createdAt: Date;
@@ -62,7 +63,8 @@ const projectRow = (row: RawCommentRow): CommentBase => {
 		parentId: row.parentId,
 		thingId: row.thingId,
 		userId: isVisible ? row.userId : null,
-		authorLogin: isVisible ? row.authorLogin : null,
+		authorDisplayName: isVisible ? row.authorDisplayName : '—',
+		isAuthor: isVisible ? Boolean(row.isAuthor) : false,
 		text: isVisible ? row.text : null,
 		statusId: row.statusId,
 		createdAt: toIso(row.createdAt),
@@ -319,6 +321,7 @@ export const createComment = async (
 			thingId,
 			parentId,
 			text,
+			userId,
 			userId,
 		]);
 		return result.insertId;
