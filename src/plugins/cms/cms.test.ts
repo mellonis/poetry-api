@@ -823,3 +823,79 @@ describe('POST /cms/users/:userId/reset-password', () => {
 		expect(mockNotifier.sendAdminPasswordReset).toHaveBeenCalled();
 	});
 });
+
+describe('reserved display names', () => {
+	it('GET /cms/reserved-display-names returns list', async () => {
+		const mysql = createMockMysql(
+			[{ id: 1, value: 'admin', reason: null, createdAt: '2026-01-01T00:00:00.000Z', createdByUserId: null }],
+			[{ total: 1 }],
+		);
+		const app = await buildApp(mysql);
+		const token = await getEditorToken();
+		const res = await app.inject({
+			method: 'GET',
+			url: '/cms/reserved-display-names',
+			headers: { authorization: `Bearer ${token}` },
+		});
+		expect(res.statusCode).toBe(200);
+		const body = JSON.parse(res.body);
+		expect(body.items).toHaveLength(1);
+		expect(body.items[0].value).toBe('admin');
+	});
+
+	it('POST /cms/reserved-display-names creates entry', async () => {
+		const mysql = createMockMysql(
+			[],
+			[{ insertId: 5 }],
+		);
+		const app = await buildApp(mysql);
+		const token = await getAdminToken();
+		const res = await app.inject({
+			method: 'POST',
+			url: '/cms/reserved-display-names',
+			headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+			body: JSON.stringify({ value: 'superuser', reason: 'obvious' }),
+		});
+		expect(res.statusCode).toBe(201);
+		expect(JSON.parse(res.body)).toMatchObject({ id: 5, value: 'superuser' });
+	});
+
+	it('POST /cms/reserved-display-names returns 409 for canonical duplicate', async () => {
+		const mysql = createMockMysql(
+			[{ value: 'admin' }],
+		);
+		const app = await buildApp(mysql);
+		const token = await getAdminToken();
+		const res = await app.inject({
+			method: 'POST',
+			url: '/cms/reserved-display-names',
+			headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+			body: JSON.stringify({ value: 'аdmin' }), // Cyrillic 'а' — homoglyph of Latin 'a'
+		});
+		expect(res.statusCode).toBe(409);
+	});
+
+	it('DELETE /cms/reserved-display-names/:id removes entry', async () => {
+		const mysql = createMockMysql([{ affectedRows: 1 }]);
+		const app = await buildApp(mysql);
+		const token = await getAdminToken();
+		const res = await app.inject({
+			method: 'DELETE',
+			url: '/cms/reserved-display-names/1',
+			headers: { authorization: `Bearer ${token}` },
+		});
+		expect(res.statusCode).toBe(204);
+	});
+
+	it('returns 403 when canEditUsers is missing', async () => {
+		const app = await buildApp(createMockMysql());
+		const token = await getEditorToken();
+		const res = await app.inject({
+			method: 'POST',
+			url: '/cms/reserved-display-names',
+			headers: { 'Content-Type': 'application/json', authorization: `Bearer ${token}` },
+			body: JSON.stringify({ value: 'x' }),
+		});
+		expect(res.statusCode).toBe(403);
+	});
+});
