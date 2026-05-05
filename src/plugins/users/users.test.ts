@@ -112,3 +112,89 @@ describe('DELETE /users/:userId', () => {
 		expect(response.statusCode).toBe(403);
 	});
 });
+
+const getTokenForUser = (sub: number) =>
+	signAccessToken(
+		{ sub, login: `user${sub}`, isAdmin: false, isEditor: false, tokenVersion: 0,
+			rights: { canVote: true, canComment: true, canEditContent: false, canEditUsers: false } },
+		secret,
+	);
+
+describe('GET /users/:userId/display-name', () => {
+	it('returns 403 for a different user', async () => {
+		const mysql = createMockMysql();
+		const app = await buildApp(mysql);
+		const token = await getTokenForUser(2); // logged in as user 2, requesting user 1
+		const res = await app.inject({
+			method: 'GET',
+			url: '/users/1/display-name',
+			headers: { authorization: `Bearer ${token}` },
+		});
+		expect(res.statusCode).toBe(403);
+	});
+
+	it('returns displayName for own user', async () => {
+		const mysql = createMockMysql([{ displayName: 'Poetic Soul', displayNameChangedAt: null }]);
+		const app = await buildApp(mysql);
+		const token = await getTokenForUser(1);
+		const res = await app.inject({
+			method: 'GET',
+			url: '/users/1/display-name',
+			headers: { authorization: `Bearer ${token}` },
+		});
+		expect(res.statusCode).toBe(200);
+		expect(JSON.parse(res.body)).toMatchObject({ displayName: 'Poetic Soul' });
+	});
+});
+
+describe('PUT /users/:userId/display-name', () => {
+	it('returns 429 when changed within 7 days', async () => {
+		const recentChange = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000); // 3 days ago
+		const mysql = createMockMysql(
+			[{ displayName: 'Old Name', displayNameChangedAt: recentChange }],
+		);
+		const app = await buildApp(mysql);
+		const token = await getTokenForUser(1);
+		const res = await app.inject({
+			method: 'PUT',
+			url: '/users/1/display-name',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ displayName: 'New Name' }),
+		});
+		expect(res.statusCode).toBe(429);
+	});
+
+	it('returns 409 when display name is reserved', async () => {
+		const mysql = createMockMysql(
+			[{ displayName: 'whatever', displayNameChangedAt: null }],
+			[{ value: 'admin' }, { value: 'mellonis' }],
+		);
+		const app = await buildApp(mysql);
+		const token = await getTokenForUser(1);
+		const res = await app.inject({
+			method: 'PUT',
+			url: '/users/1/display-name',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ displayName: 'admin' }),
+		});
+		expect(res.statusCode).toBe(409);
+	});
+
+	it('updates display name when valid and not in cooldown', async () => {
+		const mysql = createMockMysql(
+			[{ displayName: 'old', displayNameChangedAt: null }],
+			[],
+			[{}],
+		);
+		const app = await buildApp(mysql);
+		const token = await getTokenForUser(1);
+		const res = await app.inject({
+			method: 'PUT',
+			url: '/users/1/display-name',
+			headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+			body: JSON.stringify({ displayName: 'New Name' }),
+		});
+		expect(res.statusCode).toBe(200);
+		expect(JSON.parse(res.body)).toMatchObject({ displayName: 'New Name' });
+	});
+});

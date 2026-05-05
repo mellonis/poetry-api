@@ -1,11 +1,15 @@
 import type { MySQLPromisePool, MySQLRowDataPacket } from '@fastify/mysql';
 import { withConnection } from '../../lib/databaseHelpers.js';
+import { reservedCheckKey } from '../../lib/displayName.js';
 import {
 	getUserPasswordAndEmailQuery,
 	updatePasswordQuery,
 	deleteUserQuery,
 	getNotificationSettingsQuery,
 	updateNotificationSettingsQuery,
+	getDisplayNameQuery,
+	updateDisplayNameQuery,
+	getAllReservedValuesQuery,
 } from './queries.js';
 
 export interface UserCredentials {
@@ -64,3 +68,40 @@ export const updateNotificationSettings = async (
 		]);
 	});
 };
+
+export interface DisplayNameInfo {
+	displayName: string | null;
+	displayNameChangedAt: Date | null;
+}
+
+export const getDisplayName = async (
+	mysql: MySQLPromisePool,
+	userId: number,
+): Promise<DisplayNameInfo | null> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(getDisplayNameQuery, [userId]);
+		if (!rows[0]) return null;
+		return {
+			displayName: rows[0].displayName ?? null,
+			displayNameChangedAt: rows[0].displayNameChangedAt ? new Date(rows[0].displayNameChangedAt) : null,
+		};
+	});
+
+export const setDisplayName = async (
+	mysql: MySQLPromisePool,
+	userId: number,
+	displayName: string,
+): Promise<void> =>
+	withConnection(mysql, async (connection) => {
+		await connection.query(updateDisplayNameQuery, [displayName, userId]);
+	});
+
+export const isReservedDisplayName = async (
+	mysql: MySQLPromisePool,
+	displayName: string,
+): Promise<boolean> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(getAllReservedValuesQuery);
+		const checkKey = reservedCheckKey(displayName);
+		return (rows as MySQLRowDataPacket[]).some((r) => reservedCheckKey(r.value as string) === checkKey);
+	});
