@@ -31,7 +31,7 @@ export type UpdateNotificationSettingsRequest = z.infer<typeof updateNotificatio
 
 export const displayNameResponse = z.object({
 	displayName: z.string().nullable(),
-	displayNameChangedAt: z.string().nullable(),
+	inCooldown: z.boolean(),
 });
 
 export const updateDisplayNameRequest = z.object({
