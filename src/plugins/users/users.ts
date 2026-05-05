@@ -24,6 +24,10 @@ import {
 	type UpdateDisplayNameRequest,
 } from './schemas.js';
 
+const DISPLAY_NAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+const isInDisplayNameCooldown = (changedAt: Date | null): boolean =>
+	changedAt !== null && Date.now() - changedAt.getTime() < DISPLAY_NAME_COOLDOWN_MS;
+
 export async function usersPlugin(fastify: FastifyInstance) {
 	fastify.log.info('[PLUGIN] Registering: users...');
 
@@ -242,7 +246,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				if (!info) return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
 				return {
 					displayName: info.displayName,
-					displayNameChangedAt: info.displayNameChangedAt?.toISOString() ?? null,
+					inCooldown: isInDisplayNameCooldown(info.displayNameChangedAt),
 				};
 			} catch (error) {
 				request.log.error(error);
@@ -251,7 +255,6 @@ export async function usersPlugin(fastify: FastifyInstance) {
 		},
 	});
 
-	const DISPLAY_NAME_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 	fastify.put('/:userId/display-name', {
 		schema: {
@@ -285,7 +288,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				const info = await getDisplayName(fastify.mysql, userId);
 				if (!info) return reply.code(404).send({ error: 'user_not_found', message: 'User not found' });
 
-				if (info.displayNameChangedAt && Date.now() - info.displayNameChangedAt.getTime() < DISPLAY_NAME_COOLDOWN_MS) {
+				if (isInDisplayNameCooldown(info.displayNameChangedAt)) {
 					return reply.code(429).send({ error: 'display_name_cooldown', message: 'Display name can only be changed once per 7 days' });
 				}
 
@@ -298,7 +301,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Display name updated');
 				return {
 					displayName: result.value,
-					displayNameChangedAt: new Date().toISOString(),
+					inCooldown: true,
 				};
 			} catch (error) {
 				request.log.error(error);
