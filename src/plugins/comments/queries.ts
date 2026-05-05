@@ -1,3 +1,9 @@
+// "Site author" id — the user whose comments get the (Автор сайта) badge.
+// Decoupled from the workspace's "root admin" id (1) since the actual site
+// owner may post under a different account. Default 1 keeps existing dev/test
+// behavior; prod sets SITE_AUTHOR_USER_ID in .env.
+const SITE_AUTHOR_USER_ID = Number(process.env.SITE_AUTHOR_USER_ID) || 1;
+
 // Common SELECT body for a comment row, parameterized by the caller's userId
 // (or 0 for anonymous — never matches a real auth_user.id, so userVote stays 0).
 const commentRowFields = `
@@ -6,7 +12,7 @@ const commentRowFields = `
   c.r_thing_id AS thingId,
   c.r_user_id AS userId,
   c.display_name_snapshot AS authorDisplayName,
-  (c.r_user_id = 1) AS isAuthor,
+  (c.r_user_id = ${SITE_AUTHOR_USER_ID}) AS isAuthor,
   c.text,
   c.r_comment_status_id AS statusId,
   c.created_at AS createdAt,
@@ -205,7 +211,7 @@ const cmsCommentRowFields = `
   c.r_user_id AS userId,
   u.login AS authorLogin,
   c.display_name_snapshot AS authorDisplayName,
-  (c.r_user_id = 1) AS isAuthor,
+  (c.r_user_id = ${SITE_AUTHOR_USER_ID}) AS isAuthor,
   c.text,
   c.r_comment_status_id AS statusId,
   c.created_at AS createdAt,
