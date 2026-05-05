@@ -194,11 +194,12 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 				) {
 					const recipient = ctx.parentAuthor;
 					const replierDisplayName = created?.authorDisplayName ?? '—';
+					const replierIsAuthor = created?.isAuthor ?? false;
 					const siteOrigin = fastify.resolveOrigin(request);
 					const threadHref = buildThreadHref(siteOrigin, ctx, parentId);
 					sendEmail(
 						recipient.email,
-						commentReplyEmail(siteOrigin, recipient.login, replierDisplayName, sanitized.text, threadHref),
+						commentReplyEmail(siteOrigin, recipient.login, replierDisplayName, sanitized.text, threadHref, replierIsAuthor),
 					).catch((err) => request.log.warn(err, 'Comment-reply notification email failed'));
 				}
 			}
