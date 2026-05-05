@@ -5,6 +5,7 @@ import { sendEmail } from '../../lib/email.js';
 import { commentReportedEmail, commentReplyEmail, commentVoteEmail } from '../../lib/emailTemplates.js';
 import { voteValueToDb } from '../../lib/voteValue.js';
 import { sanitizeCommentText } from './sanitizeCommentText.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import {
 	listComments,
 	getCommentById,
@@ -176,7 +177,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 				parentId,
 				text: sanitized.text,
 			});
-			request.log.info({ commentId, userId, thingId: resolvedThingId, parentId }, 'Comment created');
+			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId), thingId: resolvedThingId, parentId }, 'Comment created');
 
 			// Reply notification: fire-and-forget. The thread deep link points to
 			// the parent (top-level), since pagination is on top-level — opening
@@ -241,7 +242,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			if (!sanitized.ok) return reply.code(400).send(errorBody(sanitized.error));
 
 			await updateCommentText(fastify.mysql, commentId, sanitized.text);
-			request.log.info({ commentId, userId }, 'Comment edited');
+			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment edited');
 
 			return await getCommentById(fastify.mysql, commentId, userId);
 		},
@@ -272,7 +273,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			if (meta.statusId !== COMMENT_STATUS.visible) return reply.code(409).send(errorBody('already_removed'));
 
 			await setCommentStatus(fastify.mysql, commentId, COMMENT_STATUS.deleted, userId);
-			request.log.info({ commentId, userId }, 'Comment self-deleted');
+			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment self-deleted');
 			return { ok: true as const };
 		},
 	});
@@ -306,10 +307,10 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			const dbVote = voteValueToDb(vote);
 			if (dbVote === 0) {
 				await deleteCommentVote(fastify.mysql, commentId, userId);
-				request.log.info({ commentId, userId }, 'Comment vote removed');
+				request.log.info({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment vote removed');
 			} else {
 				await upsertCommentVote(fastify.mysql, commentId, userId, dbVote);
-				request.log.info({ commentId, userId, vote }, 'Comment vote recorded');
+				request.log.info({ commentId, actorFingerprint: actorFingerprint(userId), vote }, 'Comment vote recorded');
 
 				// Vote notification: fire-and-forget. Skip self-votes (meta.userId is
 				// the comment author) and votes on comments by deleted users.
@@ -322,7 +323,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 							ctx.author.email,
 							commentVoteEmail(siteOrigin, ctx.author.login, dbVote, ctx.commentText, threadHref),
 						).catch((err) => request.log.warn(err, 'Comment-vote notification email failed'));
-						request.log.info({ commentId, recipientUserId: meta.userId }, 'Comment-vote notification email sent');
+						request.log.info({ commentId, recipientFingerprint: actorFingerprint(meta.userId) }, 'Comment-vote notification email sent');
 					}
 				}
 			}
@@ -358,7 +359,7 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			if (meta.statusId !== COMMENT_STATUS.visible) return reply.code(409).send(errorBody('not_reportable'));
 
 			await reportComment(fastify.mysql, commentId, userId, reason ?? null);
-			request.log.warn({ commentId, userId }, 'Comment reported');
+			request.log.warn({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment reported');
 
 			if (ADMIN_NOTIFY_EMAIL) {
 				sendEmail(ADMIN_NOTIFY_EMAIL, commentReportedEmail(login, commentId, reason ?? null))

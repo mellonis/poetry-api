@@ -20,37 +20,37 @@ export class EmailAuthNotifier implements AuthNotifier {
 
 	async sendActivation(email: string, login: string, key: string, origin: string): Promise<void> {
 		const href = `${origin}/activate/?key=${key}`;
-		this.logger.info({ login, email: maskEmail(email), origin }, 'Sending activation email');
+		this.logger.info({ email: maskEmail(email), origin }, 'Sending activation email');
 		await sendEmail(email, activationEmail(origin, login, href));
 	}
 
 	async sendPasswordReset(email: string, login: string, key: string, origin: string): Promise<void> {
 		const href = `${origin}/reset-password/?key=${key}`;
-		this.logger.info({ login, email: maskEmail(email), origin }, 'Sending password reset email');
+		this.logger.info({ email: maskEmail(email), origin }, 'Sending password reset email');
 		await sendEmail(email, resetPasswordEmail(origin, login, href));
 	}
 
 	async sendPasswordChanged(email: string, login: string, origin: string): Promise<void> {
 		const resetHref = `${origin}/reset-password/`;
-		this.logger.info({ login, email: maskEmail(email), origin }, 'Sending password changed email');
+		this.logger.info({ email: maskEmail(email), origin }, 'Sending password changed email');
 		await sendEmail(email, passwordChangedEmail(origin, login, resetHref));
 	}
 
 	async sendAdminActivation(email: string, login: string, key: string, origin: string): Promise<void> {
 		const href = `${origin}/activate/?key=${key}`;
-		this.logger.info({ login, email: maskEmail(email), origin }, 'Sending admin-created activation email');
+		this.logger.info({ email: maskEmail(email), origin }, 'Sending admin-created activation email');
 		await sendEmail(email, adminActivationEmail(origin, login, href));
 	}
 
 	async sendAdminPasswordReset(email: string, login: string, key: string, origin: string): Promise<void> {
 		const href = `${origin}/reset-password/?key=${key}`;
-		this.logger.info({ login, email: maskEmail(email), origin }, 'Sending admin password reset email');
+		this.logger.info({ email: maskEmail(email), origin }, 'Sending admin password reset email');
 		await sendEmail(email, adminPasswordResetEmail(origin, login, href));
 	}
 
 	async sendAdminResendActivation(email: string, login: string, key: string, origin: string): Promise<void> {
 		const href = `${origin}/activate/?key=${key}`;
-		this.logger.info({ login, email: maskEmail(email), origin }, 'Sending admin resend activation email');
+		this.logger.info({ email: maskEmail(email), origin }, 'Sending admin resend activation email');
 		await sendEmail(email, adminResendActivationEmail(origin, login, href));
 	}
 }

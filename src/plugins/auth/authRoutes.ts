@@ -31,6 +31,7 @@ import {
 	updateUserRightsAndKey,
 } from './databaseHelpers.js';
 import { issueTokens } from './issueTokens.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import {
 	activateRequest,
 	type ActivateRequest,
@@ -74,36 +75,36 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				const user = await findUserByLogin(fastify.mysql, login);
 
 				if (!user) {
-					request.log.warn({ login }, 'Login failed: user not found');
+					request.log.warn({ reason: 'user_not_found' }, 'Login failed');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
 				const passwordValid = await checkPassword(password, user.passwordHash);
 
 				if (!passwordValid) {
-					request.log.warn({ login, userId: user.userId }, 'Login failed: invalid password');
+					request.log.warn({ actorFingerprint: actorFingerprint(user.userId), reason: 'invalid_password' }, 'Login failed');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
 				if (isBanned(user.userRights)) {
-					request.log.warn({ login, userId: user.userId }, 'Login failed: account banned');
+					request.log.warn({ actorFingerprint: actorFingerprint(user.userId), reason: 'banned' }, 'Login failed');
 					return reply.code(403).send({ error: 'account_banned', message: 'Account is banned' });
 				}
 
 				if (!isEmailActivated(user.userRights)) {
-					request.log.warn({ login, userId: user.userId }, 'Login failed: account not activated');
+					request.log.warn({ actorFingerprint: actorFingerprint(user.userId), reason: 'not_activated' }, 'Login failed');
 					return reply.code(403).send({ error: 'account_not_activated', message: 'Account requires email activation' });
 				}
 
 				if (needsRehash(user.passwordHash)) {
 					const newHash = await hashPassword(password);
 					await rehashPassword(fastify.mysql, user.userId, newHash);
-					request.log.info({ login, userId: user.userId }, 'Password rehashed from MD5 to bcrypt');
+					request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Password rehashed from MD5 to bcrypt');
 				}
 
 				await updateLastLogin(fastify.mysql, user.userId);
 
-				request.log.info({ login, userId: user.userId }, 'Login successful');
+				request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Login successful');
 				return await issueTokens(fastify, user.userId, user.login, user.userRights, user.groupRights, user.groupId, user.tokenVersion);
 			} catch (error) {
 				request.log.error(error);
@@ -135,7 +136,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				}
 
 				if (isBanned(user.userRights)) {
-					request.log.warn({ userId: user.userId }, 'Token refresh failed: account banned');
+					request.log.warn({ actorFingerprint: actorFingerprint(user.userId) }, 'Token refresh failed: account banned');
 					return reply.code(403).send({ error: 'account_banned', message: 'Account is banned' });
 				}
 
@@ -197,12 +198,12 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				const key = generateVerificationKey();
 
 				await createUser(fastify.mysql, login, passwordHash, email, key);
-				request.log.info({ login, email: maskEmail(email) }, 'User registered');
+				request.log.info({ email: maskEmail(email) }, 'User registered');
 
 				try {
 					await fastify.authNotifier.sendActivation(email, login, key, fastify.resolveOrigin(request));
 				} catch (notifierError) {
-					fastify.log.error({ login, email: maskEmail(email), err: notifierError }, 'Failed to send activation email');
+					fastify.log.error({ email: maskEmail(email), err: notifierError }, 'Failed to send activation email');
 				}
 
 				const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
@@ -253,7 +254,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				const newRights = setEmailActivated(user.userRights);
 				await updateUserRightsAndKey(fastify.mysql, user.userId, newRights, null);
 
-				request.log.info({ login: user.login, userId: user.userId }, 'Account activated');
+				request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Account activated');
 				return { message: 'Account activated successfully' };
 			} catch (error) {
 				request.log.error(error);
@@ -284,7 +285,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 					try {
 						await fastify.authNotifier.sendActivation(user.email, user.login, key, fastify.resolveOrigin(request));
 					} catch (notifierError) {
-						fastify.log.error({ login, email: maskEmail(user.email), err: notifierError }, 'Failed to send activation email');
+						fastify.log.error({ email: maskEmail(user.email), err: notifierError }, 'Failed to send activation email');
 					}
 				}
 
@@ -316,7 +317,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 					const newRights = setPasswordResetRequested(user.userRights);
 
 					await updateUserRightsAndKey(fastify.mysql, user.userId, newRights, key);
-					request.log.info({ login: user.login, userId: user.userId }, 'Password reset requested');
+					request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Password reset requested');
 
 					await fastify.authNotifier.sendPasswordReset(user.email, user.login, key, fastify.resolveOrigin(request));
 				}
@@ -360,7 +361,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				await resetPassword(fastify.mysql, user.userId, passwordHash, newRights);
 				await deleteAllUserRefreshTokens(fastify.mysql, user.userId);
 
-				request.log.info({ login: user.login, userId: user.userId }, 'Password reset completed');
+				request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Password reset completed');
 				return { message: 'Password reset successfully' };
 			} catch (error) {
 				request.log.error(error);

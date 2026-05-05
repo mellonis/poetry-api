@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { errorResponse } from '../../lib/schemas.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import { requireCanEditContent } from './hooks.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import {
 	getCommentMeta,
 	setCommentStatus,
@@ -85,7 +86,7 @@ export async function commentsCmsRoutes(fastify: FastifyInstance) {
 			if (!meta) return reply.code(404).send(errorBody('not_found'));
 
 			await setCommentStatus(fastify.mysql, commentId, COMMENT_STATUS.hidden, userId);
-			request.log.info({ commentId, modUserId: userId }, 'Comment hidden by mod');
+			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment hidden by mod');
 			return { ok: true as const };
 		},
 	});
@@ -111,7 +112,7 @@ export async function commentsCmsRoutes(fastify: FastifyInstance) {
 			if (!meta) return reply.code(404).send(errorBody('not_found'));
 
 			await setCommentStatus(fastify.mysql, commentId, COMMENT_STATUS.deleted, userId);
-			request.log.info({ commentId, modUserId: userId }, 'Comment soft-deleted by mod');
+			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment soft-deleted by mod');
 			return { ok: true as const };
 		},
 	});
@@ -137,7 +138,7 @@ export async function commentsCmsRoutes(fastify: FastifyInstance) {
 			if (!meta) return reply.code(404).send(errorBody('not_found'));
 
 			await setCommentStatus(fastify.mysql, commentId, COMMENT_STATUS.visible, userId);
-			request.log.info({ commentId, modUserId: userId }, 'Comment restored by mod');
+			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment restored by mod');
 			return { ok: true as const };
 		},
 	});
@@ -163,7 +164,7 @@ export async function commentsCmsRoutes(fastify: FastifyInstance) {
 			if (!meta) return reply.code(404).send(errorBody('not_found'));
 
 			await hardDeleteComment(fastify.mysql, commentId);
-			request.log.warn({ commentId, modUserId: userId }, 'Comment hard-deleted by mod');
+			request.log.warn({ commentId, actorFingerprint: actorFingerprint(userId) }, 'Comment hard-deleted by mod');
 			return { ok: true as const };
 		},
 	});

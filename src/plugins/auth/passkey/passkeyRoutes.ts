@@ -9,6 +9,7 @@ import {
 import type { AuthenticatorTransportFuture, RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { z } from 'zod';
 import { errorResponse } from '../../../lib/schemas.js';
+import { actorFingerprint } from '../../../lib/actorFingerprint.js';
 import { isBanned, isEmailActivated } from '../rights.js';
 import { findUserByLogin, updateLastLogin } from '../databaseHelpers.js';
 import { issueTokens } from '../issueTokens.js';
@@ -141,7 +142,7 @@ export async function passkeyRoutesPlugin(fastify: FastifyInstance) {
 					request.body.name,
 				);
 
-				request.log.info({ userId }, 'Passkey registered');
+				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Passkey registered');
 				return reply.code(201).send({ message: 'Passkey registered successfully' });
 			} catch (error) {
 				request.log.error(error);
@@ -227,12 +228,12 @@ export async function passkeyRoutesPlugin(fastify: FastifyInstance) {
 				}
 
 				if (isBanned(passkey.userRights)) {
-					request.log.warn({ userId: passkey.userId, login: passkey.login }, 'Passkey login failed: account banned');
+					request.log.warn({ actorFingerprint: actorFingerprint(passkey.userId), reason: 'banned' }, 'Passkey login failed');
 					return reply.code(403).send({ error: 'account_banned', message: 'Account is banned' });
 				}
 
 				if (!isEmailActivated(passkey.userRights)) {
-					request.log.warn({ userId: passkey.userId, login: passkey.login }, 'Passkey login failed: account not activated');
+					request.log.warn({ actorFingerprint: actorFingerprint(passkey.userId), reason: 'not_activated' }, 'Passkey login failed');
 					return reply.code(403).send({ error: 'account_not_activated', message: 'Account requires email activation' });
 				}
 
@@ -250,14 +251,14 @@ export async function passkeyRoutesPlugin(fastify: FastifyInstance) {
 				});
 
 				if (!verification.verified) {
-					request.log.warn({ userId: passkey.userId, login: passkey.login }, 'Passkey login failed: verification failed');
+					request.log.warn({ actorFingerprint: actorFingerprint(passkey.userId), reason: 'verification_failed' }, 'Passkey login failed');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
 				await updatePasskeyCounter(fastify.mysql, passkey.id, verification.authenticationInfo.newCounter);
 				await updateLastLogin(fastify.mysql, passkey.userId);
 
-				request.log.info({ login: passkey.login, userId: passkey.userId }, 'Passkey login successful');
+				request.log.info({ actorFingerprint: actorFingerprint(passkey.userId) }, 'Passkey login successful');
 				return await issueTokens(
 					fastify, passkey.userId, passkey.login, passkey.userRights, passkey.groupRights, passkey.groupId, passkey.tokenVersion,
 				);
@@ -321,7 +322,7 @@ export async function passkeyRoutesPlugin(fastify: FastifyInstance) {
 					return reply.code(404).send({ error: 'not_found', message: 'Passkey not found' });
 				}
 
-				request.log.info({ userId: request.user!.sub, passkeyId: request.params.passkeyId }, 'Passkey deleted');
+				request.log.info({ actorFingerprint: actorFingerprint(request.user!.sub), passkeyId: request.params.passkeyId }, 'Passkey deleted');
 				return reply.code(204).send();
 			} catch (error) {
 				request.log.error(error);

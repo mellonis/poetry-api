@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { errorResponse } from '../../lib/schemas.js';
 import { authErrorResponse } from '../auth/schemas.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import {
 	getBookmarks,
 	resolveThingId,
@@ -77,7 +78,7 @@ export async function bookmarksPlugin(fastify: FastifyInstance) {
 			try {
 				const resolved = await resolveOrFail(fastify, sectionId, positionInSection);
 				await addBookmark(fastify.mysql, userId, resolved.thingId, resolved.sectionId);
-				request.log.info({ userId, sectionId, positionInSection }, 'Bookmark added');
+				request.log.info({ actorFingerprint: actorFingerprint(userId), sectionId, positionInSection }, 'Bookmark added');
 				return await getBookmarks(fastify.mysql, userId);
 			} catch (error) {
 				if (isNotFoundError(error)) {
@@ -109,7 +110,7 @@ export async function bookmarksPlugin(fastify: FastifyInstance) {
 			try {
 				const resolved = await resolveOrFail(fastify, sectionId, positionInSection);
 				await removeBookmark(fastify.mysql, userId, resolved.thingId, resolved.sectionId);
-				request.log.info({ userId, sectionId, positionInSection }, 'Bookmark removed');
+				request.log.info({ actorFingerprint: actorFingerprint(userId), sectionId, positionInSection }, 'Bookmark removed');
 				return await getBookmarks(fastify.mysql, userId);
 			} catch (error) {
 				if (isNotFoundError(error)) {
@@ -145,7 +146,7 @@ export async function bookmarksPlugin(fastify: FastifyInstance) {
 				}
 
 				await reorderBookmarks(fastify.mysql, userId, items);
-				request.log.info({ userId, count: items.length }, 'Bookmarks reordered');
+				request.log.info({ actorFingerprint: actorFingerprint(userId), count: items.length }, 'Bookmarks reordered');
 				return await getBookmarks(fastify.mysql, userId);
 			} catch (error) {
 				if (isNotFoundError(error)) {
@@ -181,13 +182,13 @@ export async function bookmarksPlugin(fastify: FastifyInstance) {
 					if (resolved !== null) {
 						items.push(resolved);
 					} else {
-						request.log.warn({ userId, sectionId: bookmark.sectionId, positionInSection: bookmark.positionInSection }, 'Bookmark skipped: thing not found');
+						request.log.warn({ actorFingerprint: actorFingerprint(userId), sectionId: bookmark.sectionId, positionInSection: bookmark.positionInSection }, 'Bookmark skipped: thing not found');
 					}
 				}
 
 				if (items.length > 0) {
 					await bulkAddBookmarks(fastify.mysql, userId, items);
-					request.log.info({ userId, count: items.length }, 'Bookmarks bulk-added');
+					request.log.info({ actorFingerprint: actorFingerprint(userId), count: items.length }, 'Bookmarks bulk-added');
 				}
 
 				return await getBookmarks(fastify.mysql, userId);

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { errorResponse } from '../../lib/schemas.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import { sendEmail } from '../../lib/email.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import { thingVotedEmail } from '../../lib/emailTemplates.js';
 import { voteValueToDb } from '../../lib/voteValue.js';
 import {
@@ -82,10 +83,10 @@ export async function votesPlugin(fastify: FastifyInstance) {
 
 				if (dbVote === 0) {
 					await deleteVote(fastify.mysql, thingId, userId);
-					request.log.info({ thingId, userId }, 'Vote removed');
+					request.log.info({ thingId, actorFingerprint: actorFingerprint(userId) }, 'Vote removed');
 				} else {
 					await upsertVote(fastify.mysql, thingId, userId, dbVote);
-					request.log.info({ thingId, userId, vote }, 'Vote recorded');
+					request.log.info({ thingId, actorFingerprint: actorFingerprint(userId), vote }, 'Vote recorded');
 				}
 
 				if (ADMIN_NOTIFY_EMAIL) {
