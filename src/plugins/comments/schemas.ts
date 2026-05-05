@@ -30,7 +30,8 @@ const commentBaseSchema = z.object({
 	parentId: z.number().int().positive().nullable(),
 	thingId: z.number().int().positive().nullable(),
 	userId: z.number().int().positive().nullable(),
-	authorLogin: z.string().nullable(),
+	authorDisplayName: z.string().nullable(),
+	isAuthor: z.boolean(),
 	text: z.string().nullable(),
 	statusId: z.number().int().min(1).max(3),
 	createdAt: z.string(),
@@ -88,6 +89,7 @@ const cmsCommentListQuery = z.object({
 });
 
 const cmsCommentRow = commentBaseSchema.extend({
+	authorLogin: z.string().nullable(),
 	reportCount: z.number().int().min(0),
 	statusChangedAt: z.string(),
 	statusChangedByUserId: z.number().int().positive().nullable(),
