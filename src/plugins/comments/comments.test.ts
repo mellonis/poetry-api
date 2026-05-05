@@ -72,7 +72,8 @@ const visibleRow = {
 	parentId: null,
 	thingId: 5,
 	userId: 1,
-	authorLogin: 'testuser',
+	authorDisplayName: 'testuser',
+	isAuthor: 1,
 	text: 'Hello world',
 	statusId: 1,
 	createdAt: new Date('2026-04-27T12:00:00Z'),
@@ -124,7 +125,8 @@ describe('GET /comments', () => {
 		const body = response.json();
 		expect(body.items).toHaveLength(1);
 		expect(body.items[0].text).toBeNull();
-		expect(body.items[0].authorLogin).toBeNull();
+		expect(body.items[0].authorDisplayName).toBe('—');
+		expect(body.items[0].isAuthor).toBe(false);
 		expect(body.items[0].replies).toHaveLength(1);
 		expect(body.items[0].replies[0].text).toBe('Hello world');
 	});
@@ -278,7 +280,7 @@ describe('PUT /comments/:commentId/vote', () => {
 				thingId: 5,
 				parentId: null,
 				commentText: 'some comment text',
-				authorLogin: 'author',
+				authorDisplayName: 'author',
 				authorEmail: 'author@example.com',
 				authorUserRights: 24,
 				authorGroupRights: 0,
