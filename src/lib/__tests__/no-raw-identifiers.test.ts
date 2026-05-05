@@ -2,18 +2,23 @@ import { describe, expect, it } from 'vitest';
 import { execSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-// Forbidden patterns: a `request.log.*` or `fastify.log.*` call whose
-// first argument object contains `userId`, `user_id`, or `login` as a
-// property name (shorthand or explicit key). Uses `[{,]` followed by
-// optional whitespace so it catches both `{ userId }` (shorthand) and
-// `{ login: user.login, userId }` (explicit key after comma). Does NOT
-// catch `actorFingerprint(userId)` because `userId` there follows `(`,
-// not `{` or `,`.
+// Forbidden patterns: a log call whose first argument object contains
+// `userId`, `user_id`, or `login` as a property name (shorthand or explicit
+// key). Uses `[{,]` followed by optional whitespace so it catches both
+// `{ userId }` (shorthand) and `{ login: user.login, userId }` (explicit
+// key after comma). Does NOT catch `actorFingerprint(userId)` because
+// `userId` there follows `(`, not `{` or `,`.
+//
+// Covers three logger styles:
+//   - `request.log.*`  — route handlers
+//   - `fastify.log.*`  — plugin-level code
+//   - `*.logger.*`     — class-level loggers (e.g. `this.logger.*` in
+//                        EmailAuthNotifier / ConsoleAuthNotifier)
 //
 // Limitation: multi-line log calls are not checked. This is intentional —
 // keeping calls on one line is itself a style constraint the migration enforced.
 const FORBIDDEN_REGEX =
-	String.raw`(request|fastify)\.log\.(info|warn|error|debug)\([^)]*[{,][[:space:]]*\b(userId|user_id|login)\b`;
+	String.raw`((request|fastify)\.log|\.logger)\.(info|warn|error|debug)\([^)]*[{,][[:space:]]*\b(userId|user_id|login)\b`;
 
 const SRC_ROOT = resolve(__dirname, '../../..');
 
