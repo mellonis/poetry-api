@@ -7,6 +7,7 @@ import { checkPassword, hashPassword } from '../auth/password.js';
 import { deleteAllUserRefreshTokens } from '../auth/databaseHelpers.js';
 import { getUserCredentials, updatePassword, deleteUser, getNotificationSettings, updateNotificationSettings } from './databaseHelpers.js';
 import { authErrorResponse } from '../auth/schemas.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import {
 	userIdParam,
 	changePasswordRequest,
@@ -59,7 +60,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				const passwordValid = await checkPassword(currentPassword, credentials.passwordHash);
 
 				if (!passwordValid) {
-					request.log.warn({ login: user.login, userId }, 'Password change failed: invalid current password');
+					request.log.warn({ actorFingerprint: actorFingerprint(userId) }, 'Password change failed: invalid current password');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
@@ -68,7 +69,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				await deleteAllUserRefreshTokens(fastify.mysql, userId);
 				await fastify.authNotifier.sendPasswordChanged(credentials.email, user.login, fastify.resolveOrigin(request));
 
-				request.log.info({ login: user.login, userId }, 'Password changed');
+				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Password changed');
 				return { message: 'Password changed successfully' };
 			} catch (error) {
 				request.log.error(error);
@@ -112,14 +113,14 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				const passwordValid = await checkPassword(password, credentials.passwordHash);
 
 				if (!passwordValid) {
-					request.log.warn({ login: user.login, userId }, 'Account deletion failed: invalid password');
+					request.log.warn({ actorFingerprint: actorFingerprint(userId) }, 'Account deletion failed: invalid password');
 					return reply.code(401).send({ error: 'invalid_credentials', message: 'Invalid credentials' });
 				}
 
 				await deleteAllUserRefreshTokens(fastify.mysql, userId);
 				await deleteUser(fastify.mysql, userId);
 
-				request.log.info({ login: user.login, userId }, 'Account deleted');
+				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Account deleted');
 
 				const adminEmail = process.env.ADMIN_NOTIFY_EMAIL;
 
@@ -205,7 +206,7 @@ export async function usersPlugin(fastify: FastifyInstance) {
 
 				const { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote } = request.body;
 				await updateNotificationSettings(fastify.mysql, userId, { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote });
-				request.log.info({ userId }, 'Notification settings updated');
+				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Notification settings updated');
 
 				return { notifyAuthorOnCommentReply, notifyAuthorOnCommentVote };
 			} catch (error) {

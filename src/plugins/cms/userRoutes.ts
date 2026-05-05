@@ -26,6 +26,7 @@ import { createUser, loginOrEmailExists, generateVerificationKey, updateUserRigh
 import { hashPassword } from '../auth/password.js';
 import { setPasswordResetRequested } from '../auth/rights.js';
 import { maskEmail } from '../../lib/maskEmail.js';
+import { actorFingerprint } from '../../lib/actorFingerprint.js';
 
 const adminHooks = [requireAdmin, requireCanEditUsers];
 
@@ -141,7 +142,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 
 				const userId = await createUser(fastify.mysql, login, passwordHash, email, key, groupId);
 
-				request.log.info({ userId, login, email: maskEmail(email), createdBy: request.user!.sub }, 'Admin created user');
+				request.log.info({ subjectFingerprint: actorFingerprint(userId), email: maskEmail(email), actorFingerprint: actorFingerprint(request.user!.sub) }, 'Admin created user');
 
 				await fastify.authNotifier.sendAdminActivation(email, login, key, fastify.resolveOrigin(request));
 
@@ -222,7 +223,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				await updateCmsUser(fastify.mysql, userId, newGroupId, newRights);
 				await invalidateUserSessions(fastify.mysql, userId);
 
-				request.log.info({ userId, login: currentUser.login, updatedBy: request.user!.sub }, 'Admin updated user');
+				request.log.info({ subjectFingerprint: actorFingerprint(userId), actorFingerprint: actorFingerprint(request.user!.sub) }, 'Admin updated user');
 
 				return await getUserById(fastify.mysql, userId);
 			} catch (error) {
@@ -268,7 +269,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 
 				await deleteCmsUser(fastify.mysql, userId);
 
-				request.log.info({ userId, login: user.login, deletedBy: request.user!.sub }, 'Admin deleted user');
+				request.log.info({ subjectFingerprint: actorFingerprint(userId), actorFingerprint: actorFingerprint(request.user!.sub) }, 'Admin deleted user');
 
 				return reply.code(204).send();
 			} catch (error) {
@@ -314,7 +315,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				const key = generateVerificationKey();
 				await updateUserRightsAndKey(fastify.mysql, user.id, user.rights, key);
 
-				request.log.info({ userId: user.id, login: user.login, triggeredBy: request.user!.sub }, 'Admin resent activation');
+				request.log.info({ subjectFingerprint: actorFingerprint(user.id), actorFingerprint: actorFingerprint(request.user!.sub) }, 'Admin resent activation');
 
 				await fastify.authNotifier.sendAdminResendActivation(user.email!, user.login!, key, fastify.resolveOrigin(request));
 
@@ -359,7 +360,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 				const newRights = setPasswordResetRequested(user.rights);
 				await updateUserRightsAndKey(fastify.mysql, user.id, newRights, key);
 
-				request.log.info({ userId: user.id, login: user.login, triggeredBy: request.user!.sub }, 'Admin triggered password reset');
+				request.log.info({ subjectFingerprint: actorFingerprint(user.id), actorFingerprint: actorFingerprint(request.user!.sub) }, 'Admin triggered password reset');
 
 				await fastify.authNotifier.sendAdminPasswordReset(user.email!, user.login!, key, fastify.resolveOrigin(request));
 
