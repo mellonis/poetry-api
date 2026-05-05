@@ -46,6 +46,8 @@ WEBAUTHN_RP_ID=poetry.mellonis.ru       # optional, WebAuthn Relying Party ID (d
 ADMIN_NOTIFY_EMAIL=admin@mellonis.ru  # optional, receives notifications on votes, registrations, account deletions, comment reports
 MEILI_URL=http://poetry-meilisearch:7700  # optional, Meilisearch host (default: http://poetry-meilisearch:7700)
 MEILI_MASTER_KEY=<key>               # optional (required for search to work), shared with Meilisearch container
+LOG_HMAC_KEY_CURRENT=<32-byte hex>      # required, HMAC key for actorFingerprint() log helper. In prod, written by the VPS rotation script (see mellonis/poetry docs/superpowers/specs/2026-05-05-privacy-safe-logging-design.md). In dev, any non-empty string works.
+LOG_HMAC_KEY_PREVIOUS=<32-byte hex>     # optional, prior HMAC key during rotation overlap; not read by emitters but kept in env for log analysts.
 ```
 
 See `.env.example` for a template. The server listens on `0.0.0.0:3000` (port overridable via `PORT` env var). `CONNECTION_STRING`, `JWT_SECRET`, and `ALLOWED_ORIGINS` are validated on startup. SMTP vars are required only in production (`NODE_ENV=production`); in dev mode, notifications are logged to the console instead. If `MEILI_MASTER_KEY` is not set, search is disabled (sync calls become no-ops, `GET /search` returns 503).
@@ -146,5 +148,7 @@ Validation and serialization use `fastify-type-provider-zod`. All Fastify route 
 **`withConnection(mysql, fn)`** in `src/lib/databaseHelpers.ts` — shared helper for all DB access; handles pool acquire/release via try/finally. MySQL server timezone is set to `+03:00` (Moscow) via `default-time-zone` in `mysql.cnf` — all `NOW()`, `CURDATE()`, and timestamp comparisons run in Moscow time. Verification key TTL checks use `Date.now()` (Node.js clock, UTC epoch) against the key's embedded timestamp (also `Date.now()` at generation) — self-consistent regardless of server timezone. These two clocks (DB server vs Node.js) don't cross.
 
 **Logging** uses `pino-pretty` only when `NODE_ENV !== 'production'`; raw Pino otherwise.
+
+**Privacy-safe logging** — log call sites MUST NOT include raw `userId`, `user_id`, `login`, or unmasked `email`. Use `actorFingerprint(id)` from `src/lib/actorFingerprint.ts` for actor identity (`HMAC-SHA256` of the user id, truncated to 16 hex chars, keyed by `LOG_HMAC_KEY_CURRENT`). Field naming convention: `actorFingerprint` (action-taker), `subjectFingerprint` (target of an admin action), `recipientFingerprint` (recipient of a notification). Email values use the existing `maskEmail()`. The CI guard at `src/lib/__tests__/no-raw-identifiers.test.ts` blocks regressions. Spec: `mellonis/poetry docs/superpowers/specs/2026-05-05-privacy-safe-logging-design.md`.
 
 **Deployment**: image at `ghcr.io/mellonis/poetry-api`. Workflow pattern lives in `mellonis/vps` (`vps/CLAUDE.md`). PRs touching only `.md` files, `api.http`, or `smoke-test*.sh` skip the workflow entirely. When upgrading Node.js, keep the version in sync across `Dockerfile`, `.github/workflows/deploy.yml` (`node-version`), `tsconfig.json` (`@tsconfig/nodeXX`), and `package.json` (`@tsconfig/nodeXX` + `@types/node`).
