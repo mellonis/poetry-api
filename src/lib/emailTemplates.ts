@@ -125,12 +125,12 @@ export const commentReportedEmail = (
 export const commentReplyEmail = (
 	siteOrigin: string,
 	recipientLogin: string,
-	replierLogin: string,
+	replierDisplayName: string,
 	replyText: string,
 	threadHref: string,
 ): EmailMessage => ({
-	subject: `${replierLogin} ответил(а) на ваш комментарий`,
-	html: layout(siteOrigin, recipientLogin, `<p style="color:#333;font-size:14px;"><strong>${replierLogin}</strong> ответил(а) на ваш комментарий:</p>
+	subject: `${replierDisplayName} ответил(а) на ваш комментарий`,
+	html: layout(siteOrigin, recipientLogin, `<p style="color:#333;font-size:14px;"><strong>${replierDisplayName}</strong> ответил(а) на ваш комментарий:</p>
 <blockquote style="margin:15px 0;padding:10px 15px;background:#f7f7f7;
 border-left:3px solid #999;color:#333;font-size:14px;
 white-space:pre-wrap;">${escapeHtml(replyText)}</blockquote>

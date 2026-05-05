@@ -179,6 +179,8 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 			});
 			request.log.info({ commentId, actorFingerprint: actorFingerprint(userId), thingId: resolvedThingId, parentId }, 'Comment created');
 
+			const created = await getCommentById(fastify.mysql, commentId, userId);
+
 			// Reply notification: fire-and-forget. The thread deep link points to
 			// the parent (top-level), since pagination is on top-level — opening
 			// the parent shows the new reply under it in single-thread mode.
@@ -191,17 +193,16 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 					ctx.parentAuthor.notifyAuthorOnCommentReply
 				) {
 					const recipient = ctx.parentAuthor;
-					const replierLogin = request.user!.login;
+					const replierDisplayName = created?.authorDisplayName ?? '—';
 					const siteOrigin = fastify.resolveOrigin(request);
 					const threadHref = buildThreadHref(siteOrigin, ctx, parentId);
 					sendEmail(
 						recipient.email,
-						commentReplyEmail(siteOrigin, recipient.login, replierLogin, sanitized.text, threadHref),
+						commentReplyEmail(siteOrigin, recipient.login, replierDisplayName, sanitized.text, threadHref),
 					).catch((err) => request.log.warn(err, 'Comment-reply notification email failed'));
 				}
 			}
 
-			const created = await getCommentById(fastify.mysql, commentId, userId);
 			return reply.code(201).send(created);
 		},
 	});
