@@ -266,3 +266,78 @@ export const deleteThingNotesExceptQuery = `
 export const deleteAllThingNotesQuery = `
 	DELETE FROM thing_note WHERE r_thing_id = ?;
 `;
+
+// --- Things-of-the-day calendar ---
+//
+// Rolling 365/366-day window starting today. For each day in the window:
+//   - "curated" rows: things whose finish_date matches the day's MM-DD (full
+//     date), or whose finish_date is YYYY-MM-00 and the day is the last day
+//     of that month within the window.
+//   - "fallback" row: when the curated bucket is empty, one thing picked
+//     deterministically by MD5 hash (matches the live endpoint's per-day
+//     stable random pick — see issue #130 for why MD5 and not RAND).
+// finish_date = '0000-00-00' (year-only or undated) is excluded from curated;
+// undated things may still surface as fallback picks.
+//
+// LEFT JOINs at the outer level expand to one row per (thing, section)
+// placement so the helper can collect a sections: [{id, position}] array per
+// entry. Deprecated sections (section_type_id = 0) are filtered at the join
+// level via an AND clause so that multi-placement things still show their
+// non-deprecated sections — and things with no non-deprecated placements
+// surface once with sections: []. Section status is NOT filtered: the CMS
+// view shows placements in Preparing/Withdrawn sections too, unlike the
+// public endpoint which goes through v_things_info's status filter.
+export const cmsThingsOfTheDayCalendarQuery = `
+	WITH RECURSIVE days AS (
+		SELECT CURDATE() AS d
+		UNION ALL
+		SELECT d + INTERVAL 1 DAY FROM days
+		WHERE d < CURDATE() + INTERVAL 1 YEAR - INTERVAL 1 DAY
+	),
+	curated AS (
+		SELECT
+			d.d AS bucket_day,
+			t.id, t.title, t.first_lines AS firstLines, t.finish_date AS finishDate,
+			t.r_thing_status_id AS statusId,
+			t.r_thing_category_id AS categoryId
+		FROM thing t
+		JOIN days d ON (
+			(SUBSTRING(t.finish_date, 9, 2) != '00'
+				AND SUBSTRING(t.finish_date, 6) = DATE_FORMAT(d.d, '%m-%d'))
+			OR
+			(SUBSTRING(t.finish_date, 9, 2) = '00' AND SUBSTRING(t.finish_date, 6, 2) != '00'
+				AND SUBSTRING(t.finish_date, 6, 2) = DATE_FORMAT(d.d, '%m')
+				AND d.d = LAST_DAY(d.d))
+		)
+		WHERE t.exclude_from_daily = FALSE
+	)
+	SELECT 'curated' AS kind, DATE_FORMAT(c.bucket_day, '%Y-%m-%d') AS bucketDate,
+	       c.id, c.title, c.firstLines, c.finishDate, c.statusId, c.categoryId,
+	       s.identifier AS sectionId, ti.thing_position_in_section AS position
+	FROM curated c
+	LEFT JOIN thing_identifier ti ON ti.r_thing_id = c.id
+	LEFT JOIN section s ON ti.r_section_id = s.id AND s.r_section_type_id > 0
+
+	UNION ALL
+
+	SELECT 'fallback' AS kind, DATE_FORMAT(d.d, '%Y-%m-%d') AS bucketDate,
+	       fb.id, fb.title, fb.firstLines, fb.finishDate, fb.statusId, fb.categoryId,
+	       s.identifier AS sectionId, ti.thing_position_in_section AS position
+	FROM days d
+	JOIN LATERAL (
+		SELECT id, title, first_lines AS firstLines, finish_date AS finishDate,
+		       r_thing_status_id AS statusId, r_thing_category_id AS categoryId
+		FROM thing
+		WHERE exclude_from_daily = FALSE
+		  AND SUBSTRING(finish_date, 6, 2) != DATE_FORMAT(d.d, '%m')
+		ORDER BY MD5(CONCAT(id, ':', TO_DAYS(d.d)))
+		LIMIT 1
+	) fb ON TRUE
+	LEFT JOIN thing_identifier ti ON ti.r_thing_id = fb.id
+	LEFT JOIN section s ON ti.r_section_id = s.id AND s.r_section_type_id > 0
+	WHERE NOT EXISTS (
+		SELECT 1 FROM curated c WHERE c.bucket_day = d.d
+	)
+
+	ORDER BY bucketDate, kind DESC, finishDate DESC, id, sectionId;
+`;

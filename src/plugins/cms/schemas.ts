@@ -208,6 +208,37 @@ export const updateThingRequest = z.object({
 	info: z.string().nullable().optional().transform(normInfo),
 }).refine(seoFieldsTogether, seoFieldsTogetherMessage);
 
+// --- Things-of-the-day calendar ---
+
+export const cmsThingsOfTheDayCalendarSection = z.object({
+	id: z.string(),
+	position: z.number().int(),
+});
+
+export const cmsThingsOfTheDayCalendarEntry = z.object({
+	kind: z.enum(['curated', 'fallback']),
+	id: z.number().int(),
+	title: z.string().nullable(),
+	firstLines: z.string().nullable(),
+	finishDate: z.string().describe(
+		'ISO partial date (YYYY | YYYY-MM | YYYY-MM-DD). Fallback rows may carry "0000" when the picked thing is undated.',
+	),
+	statusId: z.number().int().describe(
+		'Thing status (1=Preparing, 2=Published, 3=Editing, 4=Withdrawn). The CMS calendar shows ALL statuses, including drafts and withdrawn things — unlike the public /things-of-the-day endpoint which filters via v_things_info.',
+	),
+	categoryId: z.number().int(),
+	sections: z.array(cmsThingsOfTheDayCalendarSection).describe(
+		'Section placements (id = section.identifier, position = thing_position_in_section). Empty if the thing is not yet placed in any non-deprecated section. The CMS view skips deprecated sections (section_type_id = 0) but shows placements in all section statuses, including Preparing/Withdrawn.',
+	),
+});
+
+export const cmsThingsOfTheDayCalendarResponse = z.record(
+	z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+	z.array(cmsThingsOfTheDayCalendarEntry),
+).describe(
+	'Rolling 365–366 day window keyed by YYYY-MM-DD, from today through the same date one year minus one day later (e.g. 2026-05-06 → 2027-05-05). Each day has at least one entry: curated rows from things whose finish_date matches that day (full date or month-end for YYYY-MM-00), or a single fallback row deterministically picked from the eligible pool when the curated bucket is empty.',
+);
+
 // --- Inferred types ---
 
 export type SectionIdParam = z.infer<typeof sectionIdParam>;

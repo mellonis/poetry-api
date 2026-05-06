@@ -7,6 +7,7 @@ import { searchCmsRoutes } from './searchCmsRoutes.js';
 import { userRoutes } from './userRoutes.js';
 import { commentsCmsRoutes } from './commentsCmsRoutes.js';
 import { reservedDisplayNameRoutes } from './reservedDisplayNameRoutes.js';
+import { calendarRoutes } from './calendarRoutes.js';
 
 const requireEditorRole = async (request: FastifyRequest, reply: FastifyReply) => {
 	if (!request.user?.isEditor) {
@@ -28,6 +29,7 @@ export async function cmsPlugin(fastify: FastifyInstance) {
 	fastify.register(userRoutes);
 	fastify.register(commentsCmsRoutes);
 	fastify.register(reservedDisplayNameRoutes, { prefix: '/reserved-display-names' });
+	fastify.register(calendarRoutes);
 
 	fastify.log.info('[PLUGIN] Registered: cms');
 }
