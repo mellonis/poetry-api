@@ -295,6 +295,18 @@ export const deleteAllThingNotesQuery = `
 // CAST(... AS CHAR) on finish_date is required: mysql2 returns raw DATE
 // columns as JS Date objects in CTE/LATERAL contexts, and the response Zod
 // schema validates finishDate as a string — see #134.
+//
+// Per-day row ordering matches the public /things-of-the-day endpoint
+// (`ORDER BY thing_finish_date DESC, thing_id`): newest curated finish_date
+// first, then thing_id ascending as deterministic tiebreaker. The CMS
+// calendar previewing what the homepage carousel will show requires both
+// endpoints to agree row-for-row on the same day — without `id` as a
+// tiebreaker, MySQL's natural order for ties is unspecified by the spec
+// even if it usually returns PK order in practice.
+// `kind DESC` and `sectionId` in the outer ORDER BY are stable secondary
+// keys; curated and fallback never mix within a single day (the fallback
+// query is gated by NOT EXISTS curated for that day), so `kind DESC`
+// affects nothing in practice but keeps the sort fully deterministic.
 export const cmsThingsOfTheDayCalendarQuery = `
 	WITH RECURSIVE days AS (
 		SELECT CURDATE() AS d
