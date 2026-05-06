@@ -937,10 +937,11 @@ describe('GET /cms/things-of-the-day/calendar', () => {
 				firstLines: null, finishDate: '2010-05-06', statusId: 2, categoryId: 1,
 				sectionId: 'winter-2010', position: 12,
 			},
-			// Untitled thing on the same day, single section
+			// Untitled thing on the same day, single section. statusId: 3 (Editing)
+			// — still surfaces under the #134 filter alignment (only Published+Editing).
 			{
 				kind: 'curated', bucketDate: '2026-05-06', id: 101, title: null,
-				firstLines: 'Untitled today', finishDate: '2015-05-06', statusId: 1, categoryId: 1,
+				firstLines: 'Untitled today', finishDate: '2015-05-06', statusId: 3, categoryId: 1,
 				sectionId: 'love-poems', position: 6,
 			},
 			// Fallback on next day, no section placements (sectionId = null)

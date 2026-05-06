@@ -279,14 +279,34 @@ export const deleteAllThingNotesQuery = `
 // finish_date = '0000-00-00' (year-only or undated) is excluded from curated;
 // undated things may still surface as fallback picks.
 //
+// Filter alignment with the public /things-of-the-day endpoint (#134): a
+// thing must (1) have r_thing_status_id IN (2, 3) — Published or Editing —
+// and (2) be placed in at least one section that is itself non-deprecated
+// (r_section_type_id > 0) and Published-or-Editing (r_section_status_id IN
+// (2, 3)). Without this, the CMS calendar would show drafts and withdrawn
+// things that won't actually appear publicly, defeating the page's purpose.
+//
 // LEFT JOINs at the outer level expand to one row per (thing, section)
 // placement so the helper can collect a sections: [{id, position}] array per
-// entry. Deprecated sections (section_type_id = 0) are filtered at the join
-// level via an AND clause so that multi-placement things still show their
-// non-deprecated sections — and things with no non-deprecated placements
-// surface once with sections: []. Section status is NOT filtered: the CMS
-// view shows placements in Preparing/Withdrawn sections too, unlike the
-// public endpoint which goes through v_things_info's status filter.
+// entry. The section join also filters non-deprecated AND
+// Published-or-Editing sections so chip rows only surface placements that
+// the public site would render.
+//
+// CAST(... AS CHAR) on finish_date is required: mysql2 returns raw DATE
+// columns as JS Date objects in CTE/LATERAL contexts, and the response Zod
+// schema validates finishDate as a string — see #134.
+//
+// Per-day row ordering matches the public /things-of-the-day endpoint
+// (`ORDER BY thing_finish_date DESC, thing_id`): newest curated finish_date
+// first, then thing_id ascending as deterministic tiebreaker. The CMS
+// calendar previewing what the homepage carousel will show requires both
+// endpoints to agree row-for-row on the same day — without `id` as a
+// tiebreaker, MySQL's natural order for ties is unspecified by the spec
+// even if it usually returns PK order in practice.
+// `kind DESC` and `sectionId` in the outer ORDER BY are stable secondary
+// keys; curated and fallback never mix within a single day (the fallback
+// query is gated by NOT EXISTS curated for that day), so `kind DESC`
+// affects nothing in practice but keeps the sort fully deterministic.
 export const cmsThingsOfTheDayCalendarQuery = `
 	WITH RECURSIVE days AS (
 		SELECT CURDATE() AS d
@@ -297,7 +317,8 @@ export const cmsThingsOfTheDayCalendarQuery = `
 	curated AS (
 		SELECT
 			d.d AS bucket_day,
-			t.id, t.title, t.first_lines AS firstLines, t.finish_date AS finishDate,
+			t.id, t.title, t.first_lines AS firstLines,
+			CAST(t.finish_date AS CHAR) AS finishDate,
 			t.r_thing_status_id AS statusId,
 			t.r_thing_category_id AS categoryId
 		FROM thing t
@@ -310,13 +331,23 @@ export const cmsThingsOfTheDayCalendarQuery = `
 				AND d.d = LAST_DAY(d.d))
 		)
 		WHERE t.exclude_from_daily = FALSE
+		  AND t.r_thing_status_id IN (2, 3)
+		  AND EXISTS (
+		      SELECT 1 FROM thing_identifier ti
+		      JOIN section s ON ti.r_section_id = s.id
+		      WHERE ti.r_thing_id = t.id
+		        AND s.r_section_type_id > 0
+		        AND s.r_section_status_id IN (2, 3)
+		  )
 	)
 	SELECT 'curated' AS kind, DATE_FORMAT(c.bucket_day, '%Y-%m-%d') AS bucketDate,
 	       c.id, c.title, c.firstLines, c.finishDate, c.statusId, c.categoryId,
 	       s.identifier AS sectionId, ti.thing_position_in_section AS position
 	FROM curated c
 	LEFT JOIN thing_identifier ti ON ti.r_thing_id = c.id
-	LEFT JOIN section s ON ti.r_section_id = s.id AND s.r_section_type_id > 0
+	LEFT JOIN section s ON ti.r_section_id = s.id
+	    AND s.r_section_type_id > 0
+	    AND s.r_section_status_id IN (2, 3)
 
 	UNION ALL
 
@@ -325,16 +356,27 @@ export const cmsThingsOfTheDayCalendarQuery = `
 	       s.identifier AS sectionId, ti.thing_position_in_section AS position
 	FROM days d
 	JOIN LATERAL (
-		SELECT id, title, first_lines AS firstLines, finish_date AS finishDate,
+		SELECT id, title, first_lines AS firstLines,
+		       CAST(finish_date AS CHAR) AS finishDate,
 		       r_thing_status_id AS statusId, r_thing_category_id AS categoryId
 		FROM thing
 		WHERE exclude_from_daily = FALSE
+		  AND r_thing_status_id IN (2, 3)
 		  AND SUBSTRING(finish_date, 6, 2) != DATE_FORMAT(d.d, '%m')
+		  AND EXISTS (
+		      SELECT 1 FROM thing_identifier ti
+		      JOIN section s ON ti.r_section_id = s.id
+		      WHERE ti.r_thing_id = thing.id
+		        AND s.r_section_type_id > 0
+		        AND s.r_section_status_id IN (2, 3)
+		  )
 		ORDER BY MD5(CONCAT(id, ':', TO_DAYS(d.d)))
 		LIMIT 1
 	) fb ON TRUE
 	LEFT JOIN thing_identifier ti ON ti.r_thing_id = fb.id
-	LEFT JOIN section s ON ti.r_section_id = s.id AND s.r_section_type_id > 0
+	LEFT JOIN section s ON ti.r_section_id = s.id
+	    AND s.r_section_type_id > 0
+	    AND s.r_section_status_id IN (2, 3)
 	WHERE NOT EXISTS (
 		SELECT 1 FROM curated c WHERE c.bucket_day = d.d
 	)

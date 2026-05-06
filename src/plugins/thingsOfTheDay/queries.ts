@@ -6,6 +6,9 @@ const extendedThingFields = `
 	thing_position_in_section AS position
 `;
 
+// Curated ordering: most recent finish_date first, with thing_id as a
+// deterministic tiebreaker. The CMS calendar (#134) uses the same ordering
+// so the homepage carousel and the editor preview agree row-for-row.
 export const thingsForDateQuery = `
 	SELECT ${extendedThingFields}
 	FROM v_things_info
@@ -15,7 +18,7 @@ export const thingsForDateQuery = `
 		     OR (SUBSTRING(thing_finish_date, 6, 2) = DATE_FORMAT(CURDATE(), '%m') AND SUBSTRING(thing_finish_date, 9) = '00'
 		         AND CURDATE() = LAST_DAY(CURDATE())))
 	-- OR SUBSTRING(thing_finish_date, 6) = '00-00' (YYYY-00-00 means date unknown — excluded until a dedicated flag exists in v_things_info)
-	ORDER BY thing_finish_date DESC;
+	ORDER BY thing_finish_date DESC, thing_id;
 `;
 
 export const thingsForDateWithUserVoteQuery = `
@@ -27,7 +30,7 @@ export const thingsForDateWithUserVoteQuery = `
 		AND (SUBSTRING(thing_finish_date, 6) = DATE_FORMAT(CURDATE(), '%m-%d')
 		     OR (SUBSTRING(thing_finish_date, 6, 2) = DATE_FORMAT(CURDATE(), '%m') AND SUBSTRING(thing_finish_date, 9) = '00'
 		         AND CURDATE() = LAST_DAY(CURDATE())))
-	ORDER BY thing_finish_date DESC;
+	ORDER BY thing_finish_date DESC, thing_id;
 `;
 
 export const thingsOfTheDayFallbackQuery = `

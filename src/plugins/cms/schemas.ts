@@ -224,11 +224,11 @@ export const cmsThingsOfTheDayCalendarEntry = z.object({
 		'ISO partial date (YYYY | YYYY-MM | YYYY-MM-DD). Fallback rows may carry "0000" when the picked thing is undated.',
 	),
 	statusId: z.number().int().describe(
-		'Thing status (1=Preparing, 2=Published, 3=Editing, 4=Withdrawn). The CMS calendar shows ALL statuses, including drafts and withdrawn things — unlike the public /things-of-the-day endpoint which filters via v_things_info.',
+		'Thing status (1=Preparing, 2=Published, 3=Editing, 4=Withdrawn). The CMS calendar mirrors the public /things-of-the-day endpoint: only Published (2) and Editing (3) things are returned.',
 	),
 	categoryId: z.number().int(),
 	sections: z.array(cmsThingsOfTheDayCalendarSection).describe(
-		'Section placements (id = section.identifier, position = thing_position_in_section). Empty if the thing is not yet placed in any non-deprecated section. The CMS view skips deprecated sections (section_type_id = 0) but shows placements in all section statuses, including Preparing/Withdrawn.',
+		'Section placements (id = section.identifier, position = thing_position_in_section). Only non-deprecated, Published-or-Editing section placements appear here — same filter as the public endpoint. A thing with no such placement is excluded from the response entirely.',
 	),
 });
 
@@ -236,7 +236,7 @@ export const cmsThingsOfTheDayCalendarResponse = z.record(
 	z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 	z.array(cmsThingsOfTheDayCalendarEntry),
 ).describe(
-	'Rolling 365–366 day window keyed by YYYY-MM-DD, from today through the same date one year minus one day later (e.g. 2026-05-06 → 2027-05-05). Each day has at least one entry: curated rows from things whose finish_date matches that day (full date or month-end for YYYY-MM-00), or a single fallback row deterministically picked from the eligible pool when the curated bucket is empty.',
+	'Rolling 365–366 day window keyed by YYYY-MM-DD, from today through the same date one year minus one day later (e.g. 2026-05-06 → 2027-05-05). Each day has at least one entry: curated rows from things whose finish_date matches that day (full date or month-end for YYYY-MM-00), or a single fallback row deterministically picked from the eligible pool when the curated bucket is empty. Eligibility mirrors the public /things-of-the-day rule (Published/Editing things with at least one non-deprecated, Published/Editing section placement).',
 );
 
 // --- Inferred types ---
