@@ -38,7 +38,8 @@ export const thingsOfTheDayFallbackQuery = `
 		FROM thing
 		WHERE exclude_from_daily = FALSE
 			AND SUBSTRING(finish_date, 6, 2) != DATE_FORMAT(CURDATE(), '%m')
-		ORDER BY RAND(TO_DAYS(CURDATE()))
+		-- Row-dependent hash, not RAND(constant): the optimizer collapses the latter to scan order.
+		ORDER BY MD5(CONCAT(id, ':', TO_DAYS(CURDATE())))
 		LIMIT 1
 	) AS chosen ON v_things_info.thing_id = chosen.id;
 `;
@@ -52,7 +53,8 @@ export const thingsOfTheDayFallbackWithUserVoteQuery = `
 		FROM thing
 		WHERE exclude_from_daily = FALSE
 			AND SUBSTRING(finish_date, 6, 2) != DATE_FORMAT(CURDATE(), '%m')
-		ORDER BY RAND(TO_DAYS(CURDATE()))
+		-- See thingsOfTheDayFallbackQuery for why the ordering is hash-based, not RAND(seed).
+		ORDER BY MD5(CONCAT(id, ':', TO_DAYS(CURDATE())))
 		LIMIT 1
 	) AS chosen ON v_things_info.thing_id = chosen.id;
 `;
