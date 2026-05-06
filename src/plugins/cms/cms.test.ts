@@ -899,3 +899,120 @@ describe('reserved display names', () => {
 		expect(res.statusCode).toBe(403);
 	});
 });
+
+// --- Things-of-the-day calendar ---
+
+describe('GET /cms/things-of-the-day/calendar', () => {
+	it('returns 401 without auth token', async () => {
+		const app = await buildApp(createMockMysql());
+
+		const response = await app.inject({ method: 'GET', url: '/cms/things-of-the-day/calendar' });
+
+		expect(response.statusCode).toBe(401);
+	});
+
+	it('returns 403 for non-editor user', async () => {
+		const app = await buildApp(createMockMysql());
+		const token = await getNonEditorToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things-of-the-day/calendar',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.statusCode).toBe(403);
+	});
+
+	it('groups rows by bucketDate, emits both kinds, and folds multi-section rows', async () => {
+		const mysql = createMockMysql([
+			// Same thing in two sections — should fold to one entry with sections=[2]
+			{
+				kind: 'curated', bucketDate: '2026-05-06', id: 100, title: 'Today thing',
+				firstLines: null, finishDate: '2010-05-06', statusId: 2, categoryId: 1,
+				sectionId: 'love-poems', position: 5,
+			},
+			{
+				kind: 'curated', bucketDate: '2026-05-06', id: 100, title: 'Today thing',
+				firstLines: null, finishDate: '2010-05-06', statusId: 2, categoryId: 1,
+				sectionId: 'winter-2010', position: 12,
+			},
+			// Untitled thing on the same day, single section
+			{
+				kind: 'curated', bucketDate: '2026-05-06', id: 101, title: null,
+				firstLines: 'Untitled today', finishDate: '2015-05-06', statusId: 1, categoryId: 1,
+				sectionId: 'love-poems', position: 6,
+			},
+			// Fallback on next day, no section placements (sectionId = null)
+			{
+				kind: 'fallback', bucketDate: '2026-05-07', id: 200, title: null,
+				firstLines: 'Random fill', finishDate: '2010-09-25', statusId: 2, categoryId: 1,
+				sectionId: null, position: null,
+			},
+			// Month-only date round-trip
+			{
+				kind: 'curated', bucketDate: '2026-05-31', id: 102, title: 'Month-only thing',
+				firstLines: null, finishDate: '2003-05-00', statusId: 2, categoryId: 1,
+				sectionId: 'misc', position: 1,
+			},
+			// Fallback for an undated thing
+			{
+				kind: 'fallback', bucketDate: '2026-06-01', id: 300, title: null,
+				firstLines: null, finishDate: '0000-00-00', statusId: 2, categoryId: 1,
+				sectionId: 'misc', position: 99,
+			},
+		]);
+		const app = await buildApp(mysql);
+		const token = await getEditorToken(false); // GET works without canEditContent
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things-of-the-day/calendar',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+
+		expect(Object.keys(body)).toEqual(['2026-05-06', '2026-05-07', '2026-05-31', '2026-06-01']);
+
+		// Two entries on May 6 — multi-section thing folded to one entry.
+		expect(body['2026-05-06']).toHaveLength(2);
+		expect(body['2026-05-06'][0]).toEqual({
+			kind: 'curated', id: 100, title: 'Today thing',
+			firstLines: null, finishDate: '2010-05-06', statusId: 2, categoryId: 1,
+			sections: [
+				{ id: 'love-poems', position: 5 },
+				{ id: 'winter-2010', position: 12 },
+			],
+		});
+		expect(body['2026-05-06'][1].sections).toEqual([{ id: 'love-poems', position: 6 }]);
+
+		// Both curated and fallback kinds present somewhere in the response.
+		const kinds = Object.values(body).flat().map((e: { kind: string }) => e.kind);
+		expect(kinds).toContain('curated');
+		expect(kinds).toContain('fallback');
+
+		// Fallback with no placements → empty sections array, not omitted.
+		expect(body['2026-05-07'][0].sections).toEqual([]);
+
+		// Partial-date round-trip via dbDateToIso.
+		expect(body['2026-05-31'][0].finishDate).toBe('2003-05');
+		// Undated fallback surfaces as '0000'.
+		expect(body['2026-06-01'][0].finishDate).toBe('0000');
+	});
+
+	it('returns an empty object when the query returns no rows', async () => {
+		const app = await buildApp(createMockMysql([]));
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/cms/things-of-the-day/calendar',
+			headers: { authorization: `Bearer ${token}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.json()).toEqual({});
+	});
+});

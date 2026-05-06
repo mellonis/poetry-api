@@ -43,6 +43,7 @@ import {
 	updateThingNoteQuery,
 	deleteThingNotesExceptQuery,
 	deleteAllThingNotesQuery,
+	cmsThingsOfTheDayCalendarQuery,
 } from './queries.js';
 
 // --- Settings mapping ---
@@ -612,4 +613,76 @@ export const getThingInSectionsCount = async (mysql: MySQLPromisePool, thingId: 
 	withConnection(mysql, async (connection) => {
 		const [rows] = await connection.query<MySQLRowDataPacket[]>(thingInSectionsCountQuery, [thingId]);
 		return rows[0].cnt as number;
+	});
+
+// --- Things-of-the-day calendar ---
+
+export interface CmsCalendarSection {
+	id: string;
+	position: number;
+}
+
+export interface CmsCalendarEntry {
+	kind: 'curated' | 'fallback';
+	id: number;
+	title: string | null;
+	firstLines: string | null;
+	finishDate: string;
+	statusId: number;
+	categoryId: number;
+	sections: CmsCalendarSection[];
+}
+
+export type CmsThingsOfTheDayCalendar = Record<string, CmsCalendarEntry[]>;
+
+// SQL produces one row per (thing, section_placement) pair via LEFT JOINs on
+// thing_identifier + section. Multiple rows for the same (kind, id) within
+// one bucket are folded into a single entry; their sectionId/position pairs
+// accumulate into `sections`. Things with no non-deprecated placements emit
+// one row with sectionId=null → entry.sections stays empty.
+export const getThingsOfTheDayCalendar = async (
+	mysql: MySQLPromisePool,
+): Promise<CmsThingsOfTheDayCalendar> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(cmsThingsOfTheDayCalendarQuery);
+
+		const buckets = new Map<string, { order: string[]; entries: Map<string, CmsCalendarEntry> }>();
+
+		for (const row of rows) {
+			const bucketDate = row.bucketDate as string;
+			let bucket = buckets.get(bucketDate);
+			if (!bucket) {
+				bucket = { order: [], entries: new Map() };
+				buckets.set(bucketDate, bucket);
+			}
+
+			const entryKey = `${row.kind as string}:${row.id as number}`;
+			let entry = bucket.entries.get(entryKey);
+			if (!entry) {
+				entry = {
+					kind: row.kind as 'curated' | 'fallback',
+					id: row.id as number,
+					title: (row.title as string) ?? null,
+					firstLines: (row.firstLines as string) ?? null,
+					finishDate: dbDateToIso(row.finishDate as string),
+					statusId: row.statusId as number,
+					categoryId: row.categoryId as number,
+					sections: [],
+				};
+				bucket.entries.set(entryKey, entry);
+				bucket.order.push(entryKey);
+			}
+
+			const sectionId = row.sectionId as string | null;
+			if (sectionId !== null && !entry.sections.some((s) => s.id === sectionId)) {
+				entry.sections.push({ id: sectionId, position: row.position as number });
+			}
+		}
+
+		const grouped: CmsThingsOfTheDayCalendar = {};
+		for (const [bucketDate, bucket] of buckets) {
+			grouped[bucketDate] = bucket.order.map((key) => bucket.entries.get(key)!);
+		}
+
+		return grouped;
 	});
