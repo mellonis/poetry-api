@@ -1,7 +1,7 @@
 {
 	"private": true,
 	"name": "api.mellonis.ru",
-	"version": "1.1.0",
+	"version": "1.1.1",
 	"main": "build/index.js",
 	"type": "module",
 	"author": "Ruslan Gilmullin",
