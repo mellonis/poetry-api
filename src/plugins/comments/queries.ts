@@ -72,6 +72,23 @@ export const commentByIdQuery = `
   GROUP BY c.id
 `;
 
+// Lookup for the single-comment response: any one (sectionIdentifier,
+// positionInSection) pair for a thing that lives in multiple sections.
+// Same convention as commentReplyContextQuery — any link lands on the same
+// comment thread (Comments widget keys by thingId, not section). ORDER BY
+// ti.id keeps the choice stable across calls so the rendered URL doesn't
+// flicker between renders.
+export const thingSectionContextQuery = `
+  SELECT
+    s.identifier               AS sectionIdentifier,
+    ti.thing_position_in_section AS positionInSection
+  FROM thing_identifier ti
+  JOIN section s ON s.id = ti.r_section_id
+  WHERE ti.r_thing_id = ?
+  ORDER BY ti.id ASC
+  LIMIT 1
+`;
+
 // Used for parent validation on insert + edit-window / ownership / status checks
 // on update / delete.
 export const commentMetaByIdQuery = `
