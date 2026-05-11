@@ -186,3 +186,82 @@ describe('POST /auth/register', () => {
 		expect(response.json().error).toBe('invalid_input');
 	});
 });
+
+describe('GET /auth/me', () => {
+	it('returns the verified user payload for a valid token', async () => {
+		const mysql = createMockMysql([activeUserRow], [], []);
+		const app = buildApp(mysql);
+
+		const login = await app.inject({
+			method: 'POST',
+			url: '/auth/login',
+			payload: { login: 'testuser', password: 'password123' },
+		});
+		const { accessToken } = login.json();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/auth/me',
+			headers: { authorization: `Bearer ${accessToken}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body).toEqual({
+			id: 1,
+			login: 'testuser',
+			isAdmin: false,
+			isEditor: false,
+			rights: { canVote: true, canComment: true, canEditContent: false, canEditUsers: false },
+		});
+	});
+
+	it('returns 401 when Authorization header is missing', async () => {
+		const mysql = createMockMysql();
+		const app = buildApp(mysql);
+
+		const response = await app.inject({ method: 'GET', url: '/auth/me' });
+
+		expect(response.statusCode).toBe(401);
+		expect(response.json()).toEqual({ error: 'unauthorized', message: 'Missing or invalid Authorization header' });
+	});
+
+	it('returns 401 for a malformed token', async () => {
+		const mysql = createMockMysql();
+		const app = buildApp(mysql);
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/auth/me',
+			headers: { authorization: 'Bearer not-a-real-jwt' },
+		});
+
+		expect(response.statusCode).toBe(401);
+		expect(response.json()).toEqual({ error: 'unauthorized', message: 'Invalid or expired token' });
+	});
+
+	it('reflects canEditContent=true for an editor', async () => {
+		// editor group: rights 14336 = bits 11+12+13 (edit_votes + edit_things + edit_news)
+		const editorRow = { ...activeUserRow, group_id: 2, group_rights: 14336 };
+		const mysql = createMockMysql([editorRow], [], []);
+		const app = buildApp(mysql);
+
+		const login = await app.inject({
+			method: 'POST',
+			url: '/auth/login',
+			payload: { login: 'testuser', password: 'password123' },
+		});
+		const { accessToken } = login.json();
+
+		const response = await app.inject({
+			method: 'GET',
+			url: '/auth/me',
+			headers: { authorization: `Bearer ${accessToken}` },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const body = response.json();
+		expect(body.isEditor).toBe(true);
+		expect(body.rights.canEditContent).toBe(true);
+	});
+});
