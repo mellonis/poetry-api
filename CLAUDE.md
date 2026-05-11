@@ -49,6 +49,7 @@ MEILI_URL=http://poetry-meilisearch:7700  # optional, Meilisearch host (default:
 MEILI_MASTER_KEY=<key>               # optional (required for search to work), shared with Meilisearch container
 LOG_HMAC_KEY_CURRENT=<32-byte hex>      # required, HMAC key for actorFingerprint() log helper. In prod, written by the VPS rotation script (see mellonis/poetry docs/superpowers/specs/2026-05-05-privacy-safe-logging-design.md). In dev, any non-empty string works.
 LOG_HMAC_KEY_PREVIOUS=<32-byte hex>     # optional, prior HMAC key during rotation overlap; not read by emitters but kept in env for log analysts.
+INITIAL_ADMIN_PASSWORD=<gate-secret>    # optional, gates POST /setup/admin for the first-run wizard. When set + no active admins exist, the wizard frontends collect this secret from the operator (separate from the chosen admin password) and forward it as a one-shot authorization. Unset in normal operation; set on first deploy and unset after the initial admin is created. See `docs/superpowers/specs/2026-05-11-first-run-setup-design.md`.
 ```
 
 See `.env.example` for a template. The server listens on `0.0.0.0:3000` (port overridable via `PORT` env var). `CONNECTION_STRING`, `JWT_SECRET`, and `ALLOWED_ORIGINS` are validated on startup. SMTP vars are required only in production (`NODE_ENV=production`); in dev mode, notifications are logged to the console instead. If `MEILI_MASTER_KEY` is not set, search is disabled (sync calls become no-ops, `GET /search` returns 503).
@@ -60,6 +61,8 @@ See `.env.example` for a template. The server listens on `0.0.0.0:3000` (port ov
 Fastify app using a plugin-based structure under `src/plugins/`:
 
 - **`database/`** — registers the MySQL connection pool on the Fastify instance via `@fastify/mysql`
+- **`health/`** — `GET /health` (public, no auth, no rate-limit). Always returns 200 with `{status: 'ok', db: 'ok' | 'error'}`. Probes the DB with `SELECT 1`; `db: 'error'` signals api-alive-but-db-broken. Consumed by the first-run wizard's Page-1 status check and by external monitoring
+- **`setup/`** — first-run setup endpoints (public, rate-limited). `GET /setup/status` returns `{schema: {db_reachable, auth_user_table, display_name_col}, has_active_admins, setup_secret_configured, needs_setup}`. `POST /setup/admin` (body `{secret, email, password}`) is gated by `INITIAL_ADMIN_PASSWORD` env, one-shot (refuses when an active admin exists), and on success INSERTs the root admin row (`id=1, login='admin', r_group_id=1, rights=1`) using `bcryptjs`. Plugin-scoped `setErrorHandler` reformats Zod validation errors to `{error: 'validation', issues: [...]}`. Response codes: 201 / 400 / 401 / 409 / 500 / 503. See `docs/superpowers/specs/2026-05-11-first-run-setup-design.md`. `has_active_admins` excludes banned users via JOIN on `auth_group` checking `(u.rights & 4) = 0 AND (g.rights & 4) = 0`
 - **`auth/`** — `auth.ts` is a `fastify-plugin` decorator (`verifyJwt`, `optionalVerifyJwt`, `requireRight`) visible to all plugins
   - `authRoutes.ts` — routes prefixed `/auth` (register, activate, login, refresh, logout, password reset). Sends `ADMIN_NOTIFY_EMAIL` on new registration
   - Pure utilities: `password.ts`, `jwt.ts`, `rights.ts`, `issueTokens.ts`
