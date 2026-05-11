@@ -52,6 +52,7 @@ import {
 	type RequestPasswordResetRequest,
 	resetPasswordRequest,
 	type ResetPasswordRequest,
+	meResponse,
 } from './schemas.js';
 
 export async function authRoutesPlugin(fastify: FastifyInstance) {
@@ -367,6 +368,29 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				request.log.error(error);
 				return reply.code(500).send({ error: 'Internal server error' });
 			}
+		},
+	});
+
+	fastify.get('/me', {
+		preHandler: fastify.verifyJwt,
+		schema: {
+			description: 'Return the verified session payload (id, login, isAdmin, isEditor, rights).',
+			tags: ['Auth'],
+			response: {
+				200: meResponse,
+				401: authErrorResponse,
+			},
+		},
+		handler: async (request, reply) => {
+			// verifyJwt preHandler guarantees request.user is non-null here.
+			const user = request.user!;
+			return reply.send({
+				id: user.sub,
+				login: user.login,
+				isAdmin: user.isAdmin,
+				isEditor: user.isEditor,
+				rights: user.rights,
+			});
 		},
 	});
 

@@ -78,3 +78,13 @@ export type ActivateRequest = z.infer<typeof activateRequest>;
 export type RequestPasswordResetRequest = z.infer<typeof requestPasswordResetRequest>;
 export type ResendActivationRequest = z.infer<typeof resendActivationRequest>;
 export type ResetPasswordRequest = z.infer<typeof resetPasswordRequest>;
+
+export const meResponse = z.object({
+	id: z.number(),
+	login: z.string(),
+	isAdmin: z.boolean(),
+	isEditor: z.boolean(),
+	rights: resolvedRightsSchema,
+});
+
+export type MeResponse = z.infer<typeof meResponse>;
