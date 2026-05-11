@@ -20,6 +20,7 @@ import { cmsPlugin } from './plugins/cms/cms.js';
 import { commentsPlugin } from './plugins/comments/comments.js';
 import searchPlugin from './plugins/search/search.js';
 import { searchRoutes } from './plugins/search/searchRoutes.js';
+import { healthPlugin } from './plugins/health/health.js';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 
@@ -85,6 +86,7 @@ fastify.register(rateLimit, {
 	},
 });
 fastify.register(databasePlugin);
+fastify.register(healthPlugin);
 fastify.register(searchPlugin);
 fastify.register(authPlugin);
 fastify.register(authNotifierPlugin);
