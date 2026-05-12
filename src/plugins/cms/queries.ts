@@ -168,9 +168,13 @@ export const cmsAuthorQuery = `
 `;
 
 export const updateAuthorQuery = `
-	UPDATE news
-	SET text = ?, date = ?, seo_description = ?, seo_keywords = ?
-	WHERE id = 1;
+	INSERT INTO news (id, date, text, seo_description, seo_keywords)
+	VALUES (1, ?, ?, ?, ?)
+	ON DUPLICATE KEY UPDATE
+		date = VALUES(date),
+		text = VALUES(text),
+		seo_description = VALUES(seo_description),
+		seo_keywords = VALUES(seo_keywords);
 `;
 
 // --- Thing CRUD ---

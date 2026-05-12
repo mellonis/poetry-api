@@ -14,7 +14,6 @@ export async function authorRoutes(fastify: FastifyInstance) {
 				200: cmsAuthorResponse,
 				401: authErrorResponse,
 				403: authErrorResponse,
-				404: errorResponse,
 				500: errorResponse,
 			},
 		},
@@ -22,11 +21,7 @@ export async function authorRoutes(fastify: FastifyInstance) {
 			try {
 				const author = await getCmsAuthor(fastify.mysql);
 
-				if (!author) {
-					return reply.code(404).send({ error: 'Author page not found' });
-				}
-
-				return author;
+				return author ?? { text: '', date: '' };
 			} catch (error) {
 				request.log.error(error);
 				return reply.code(500).send({ error: 'Internal server error' });
@@ -44,7 +39,6 @@ export async function authorRoutes(fastify: FastifyInstance) {
 				200: cmsAuthorResponse,
 				401: authErrorResponse,
 				403: authErrorResponse,
-				404: errorResponse,
 				500: errorResponse,
 			},
 		},
@@ -56,7 +50,7 @@ export async function authorRoutes(fastify: FastifyInstance) {
 				const author = await getCmsAuthor(fastify.mysql);
 
 				if (!author) {
-					return reply.code(404).send({ error: 'Author page not found' });
+					return reply.code(500).send({ error: 'Internal server error' });
 				}
 
 				return author;
