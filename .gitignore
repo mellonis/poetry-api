@@ -4,3 +4,4 @@ build
 .claude
 
 api.mellonis.ru.tar.gz
+!.ddev/mutagen/mutagen.yml

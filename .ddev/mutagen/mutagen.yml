@@ -1,0 +1,20 @@
+# Custom mutagen config: ignore node_modules so host (macOS) and container (Linux)
+# keep independent installs. Without this, esbuild/swc native binaries get
+# synced across platforms and `npm run dev` fails with platform mismatch errors.
+# Run `ddev mutagen reset` after changing this file.
+sync:
+  defaults:
+    mode: "two-way-resolved"
+    stageMode: "neighboring"
+    ignore:
+      paths:
+        - "/.git"
+        - "/.tarballs"
+        - "/.ddev/db_snapshots"
+        - "/.ddev/.importdb*"
+        - ".DS_Store"
+        - ".idea"
+        - "/node_modules"
+        - "/build"
+    symlink:
+      mode: "posix-raw"

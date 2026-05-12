@@ -1,0 +1,12 @@
+services:
+  web:
+    networks:
+      default: {}
+      poetry-ddev:
+        aliases:
+          - poetry-api
+
+networks:
+  poetry-ddev:
+    name: poetry-ddev
+    external: true
