@@ -402,7 +402,7 @@ export const updateAuthor = async (
 	data: { text: string; date: string; seoDescription: string | null; seoKeywords: string | null },
 ): Promise<void> => {
 	await withConnection(mysql, async (connection) => {
-		await connection.query(updateAuthorQuery, [data.text, data.date, data.seoDescription, data.seoKeywords]);
+		await connection.query(updateAuthorQuery, [data.date, data.text, data.seoDescription, data.seoKeywords]);
 	});
 };
 

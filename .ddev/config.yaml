@@ -24,7 +24,7 @@ web_environment:
   - JWT_REFRESH_TOKEN_TTL=2592000
   - ACTIVATION_KEY_TTL=86400
   - RESET_KEY_TTL=3600
-  - ALLOWED_ORIGINS=https://poetry.ddev.site
+  - ALLOWED_ORIGINS=https://poetry.ddev.site,http://localhost:3000
   - WEBAUTHN_RP_ID=poetry.ddev.site
   - SITE_AUTHOR_USER_ID=1
   - MEILI_URL=http://poetry-meilisearch:7700
