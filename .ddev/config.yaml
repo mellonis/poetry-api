@@ -1,0 +1,36 @@
+name: poetry-api
+type: generic
+webserver_type: generic
+nodejs_version: "24"
+disable_settings_management: true
+corepack_enable: false
+timezone: Europe/Moscow
+omit_containers: [db]
+additional_hostnames:
+  - api.poetry
+web_extra_exposed_ports:
+  - name: api
+    container_port: 3000
+    http_port: 80
+    https_port: 443
+web_extra_daemons:
+  - name: api
+    command: "bash -c 'cd /var/www/html && npm install --no-audit --no-fund && (test -f .env || touch .env) && npm run dev'"
+    directory: /var/www/html
+web_environment:
+  - CONNECTION_STRING=mysql://db:db@poetry-db:3306/poetry
+  - JWT_SECRET=dev-jwt-secret-at-least-32-characters-long-please
+  - JWT_ACCESS_TOKEN_TTL=900
+  - JWT_REFRESH_TOKEN_TTL=2592000
+  - ACTIVATION_KEY_TTL=86400
+  - RESET_KEY_TTL=3600
+  - ALLOWED_ORIGINS=https://poetry.ddev.site
+  - WEBAUTHN_RP_ID=poetry.ddev.site
+  - SITE_AUTHOR_USER_ID=1
+  - MEILI_URL=http://poetry-meilisearch:7700
+  - MEILI_MASTER_KEY=dev-master-key-change-me
+  - LOG_HMAC_KEY_CURRENT=dev-placeholder-do-not-use-in-prod-this-is-only-for-local-tests
+  - INITIAL_ADMIN_PASSWORD=dev-initial-admin-secret-change-me
+hooks:
+  pre-start:
+    - exec-host: docker network inspect poetry-ddev >/dev/null 2>&1 || docker network create poetry-ddev

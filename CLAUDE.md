@@ -25,6 +25,13 @@ node build/index.js
 ./smoke-test.sh [base_url]      # full auth flow (test cases in smoke-tests/*.sh)
 ```
 
+## Local development with DDEV (recommended)
+
+```bash
+ddev start    # builds + starts; first run: mkcert -install, npm install in container
+```
+API at `https://api.poetry.ddev.site`; cross-project DB (`poetry-db:3306`) and Meilisearch (`poetry-meilisearch:7700`) are reached on the shared `poetry-ddev` Docker network via aliases. Env from `.ddev/config.yaml` (no `.env` file needed locally). `tsx watch` runs as a `web_extra_daemons` entry. For DDEV WebAuthn, `WEBAUTHN_RP_ID=poetry.ddev.site` (not `localhost`) — already set in `.ddev/config.yaml`. See `poetry/CLAUDE.md` § Local development for the full stack.
+
 ## Environment
 
 Requires a `.env` file with:
