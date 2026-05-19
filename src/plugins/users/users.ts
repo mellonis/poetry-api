@@ -163,6 +163,14 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				const { userId } = request.params;
 				const user = request.user!;
 
+				request.log.info(
+					{
+						actorFingerprint: actorFingerprint(request.user!.sub),
+						path: '/users/:userId/notification-settings',
+					},
+					'Deprecated endpoint hit',
+				);
+
 				if (user.sub !== userId) {
 					return reply.code(403).send({ error: 'forbidden', message: 'Cannot read another user\'s notification settings' });
 				}
@@ -201,6 +209,14 @@ export async function usersPlugin(fastify: FastifyInstance) {
 			try {
 				const { userId } = request.params;
 				const user = request.user!;
+
+				request.log.info(
+					{
+						actorFingerprint: actorFingerprint(request.user!.sub),
+						path: '/users/:userId/notification-settings',
+					},
+					'Deprecated endpoint hit',
+				);
 
 				if (user.sub !== userId) {
 					return reply.code(403).send({ error: 'forbidden', message: 'Cannot update another user\'s notification settings' });
