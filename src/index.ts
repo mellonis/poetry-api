@@ -18,6 +18,7 @@ import { bookmarksPlugin } from './plugins/bookmarks/bookmarks.js';
 import { authorPlugin } from './plugins/author/author.js';
 import { cmsPlugin } from './plugins/cms/cms.js';
 import { commentsPlugin } from './plugins/comments/comments.js';
+import { notificationsPlugin } from './plugins/notifications/notifications.js';
 import searchPlugin from './plugins/search/search.js';
 import { searchRoutes } from './plugins/search/searchRoutes.js';
 import { healthPlugin } from './plugins/health/health.js';
@@ -103,6 +104,7 @@ fastify.register(bookmarksPlugin, { prefix: '/bookmarks' });
 fastify.register(authorPlugin, { prefix: '/author' });
 fastify.register(cmsPlugin, { prefix: '/cms' });
 fastify.register(commentsPlugin, { prefix: '/comments' });
+fastify.register(notificationsPlugin, { prefix: '/notifications' });
 fastify.register(searchRoutes, { prefix: '/search' });
 
 async function main() {
