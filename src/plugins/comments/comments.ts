@@ -2,7 +2,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { errorResponse } from '../../lib/schemas.js';
 import { authErrorResponse } from '../auth/schemas.js';
 import { sendEmail } from '../../lib/email.js';
-import { commentReportedEmail, commentReplyEmail, commentVoteEmail } from '../../lib/emailTemplates.js';
+import { commentReportedEmail } from '../../lib/emailTemplates.js';
+import { notifyCommentReply, notifyCommentVote } from '../../lib/notifications.js';
 import { voteValueToDb } from '../../lib/voteValue.js';
 import { sanitizeCommentText } from './sanitizeCommentText.js';
 import { actorFingerprint } from '../../lib/actorFingerprint.js';
@@ -197,18 +198,24 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 				if (
 					ctx?.parentAuthor &&
 					ctx.parentAuthor.userId !== userId &&
-					!ctx.parentAuthor.isBanned &&
-					ctx.parentAuthor.notifyAuthorOnCommentReply
+					!ctx.parentAuthor.isBanned
 				) {
 					const recipient = ctx.parentAuthor;
 					const replierDisplayName = created?.authorDisplayName ?? '—';
 					const replierIsAuthor = created?.isAuthor ?? false;
 					const siteOrigin = fastify.resolveOrigin(request);
 					const threadHref = buildThreadHref(siteOrigin, ctx, parentId);
-					sendEmail(
-						recipient.email,
-						commentReplyEmail(siteOrigin, recipient.login, replierDisplayName, sanitized.text, threadHref, replierIsAuthor),
-					).catch((err) => request.log.warn(err, 'Comment-reply notification email failed'));
+
+					notifyCommentReply(fastify, request, {
+						recipient,
+						parentCommentId: parentId,
+						replyCommentId: commentId,
+						replierDisplayName,
+						replierIsAuthor,
+						replyText: sanitized.text,
+						siteOrigin,
+						threadHref,
+					});
 				}
 			}
 
@@ -326,14 +333,18 @@ export async function commentsPlugin(fastify: FastifyInstance) {
 				// the comment author) and votes on comments by deleted users.
 				if (meta.userId !== null && meta.userId !== userId) {
 					const ctx = await getCommentVoteContext(fastify.mysql, commentId);
-					if (ctx?.author && !ctx.author.isBanned && ctx.author.notifyAuthorOnCommentVote) {
+					if (ctx?.author && !ctx.author.isBanned) {
 						const siteOrigin = fastify.resolveOrigin(request);
 						const threadHref = buildThreadHref(siteOrigin, ctx, ctx.threadCommentId);
-						sendEmail(
-							ctx.author.email,
-							commentVoteEmail(siteOrigin, ctx.author.login, dbVote, ctx.commentText, threadHref),
-						).catch((err) => request.log.warn(err, 'Comment-vote notification email failed'));
-						request.log.info({ commentId, recipientFingerprint: actorFingerprint(meta.userId) }, 'Comment-vote notification email sent');
+
+						notifyCommentVote(fastify, request, {
+							recipient: ctx.author,
+							commentId,
+							voteDirection: dbVote as 1 | -1,
+							commentText: ctx.commentText,
+							siteOrigin,
+							threadHref,
+						});
 					}
 				}
 			}
