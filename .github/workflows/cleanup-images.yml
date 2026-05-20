@@ -26,11 +26,11 @@ jobs:
               v => Date.now() - new Date(v.created_at).getTime() > cutoffMs
             );
             for (const v of toDelete) {
-              await github.rest.packages.deletePackageVersionForUser({
+              await github.request('DELETE /users/{username}/packages/{package_type}/{package_name}/versions/{package_version_id}', {
+                username: context.repo.owner,
                 package_type: 'container',
                 package_name: packageName,
-                username: context.repo.owner,
-                version_id: v.id,
+                package_version_id: v.id,
               });
             }
             core.info(`Deleted ${toDelete.length} of ${versions.length} versions`);
