@@ -27,7 +27,17 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) =>
 
 const fastify: FastifyInstance = Fastify({
 	logger: process.env.NODE_ENV === 'production'
-		? true
+		? {
+			// Match the JSON log shape emitted by poetry-nextjs and poetry-old2 so
+			// the three services share one canonical line format for downstream
+			// tooling (dozzle, log aggregators):
+			//   {"time":"<iso>","level":"info","reqId":"…","msg":"…"}
+			// Pino's defaults emit numeric levels (30/40/…), unix-ms time, and
+			// per-line pid+hostname — none of which match the rest of the stack.
+			formatters: { level: (label) => ({ level: label }) },
+			timestamp: () => `,"time":"${new Date().toISOString()}"`,
+			base: null,
+		}
 		: { transport: { target: 'pino-pretty' } },
 	genReqId: (req) => (req.headers['x-request-id'] as string) || randomUUID(),
 });
