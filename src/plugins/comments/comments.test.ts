@@ -26,19 +26,34 @@ beforeEach(() => {
 // listComments runs multiple queries on one connection, so the mock advances
 // per query call rather than per getConnection (which is the simpler pattern
 // used by votes.test.ts where each route call does a single query).
-function createMockMysql(...responses: Record<string, unknown>[][]): MySQLPromisePool {
-	let queryIndex = 0;
+// beginTransaction/commit/rollback stubs are needed for the notifications
+// helper (upsertVoteNotification) which runs inside a transaction.
+// `sqlLog` is attached to the returned pool so tests can assert the cumulative
+// stream of executed SQL across all acquired connections (handy for the
+// fire-and-forget notification helpers, which run on their own connection).
+type MockMysqlPool = MySQLPromisePool & { __sqlLog: string[] };
 
-	return {
+function createMockMysql(...responses: (Record<string, unknown>[] | Record<string, unknown>)[]): MockMysqlPool {
+	let queryIndex = 0;
+	const sqlLog: string[] = [];
+
+	const pool = {
 		getConnection: vi.fn().mockImplementation(() =>
 			Promise.resolve({
-				query: vi.fn().mockImplementation(() =>
-					Promise.resolve([responses[queryIndex++] ?? []])
-				),
+				query: vi.fn().mockImplementation((sql: string) => {
+					sqlLog.push(sql);
+					return Promise.resolve([responses[queryIndex++] ?? []]);
+				}),
+				beginTransaction: vi.fn().mockResolvedValue(undefined),
+				commit: vi.fn().mockResolvedValue(undefined),
+				rollback: vi.fn().mockResolvedValue(undefined),
 				release: vi.fn(),
 			})
 		),
-	} as unknown as MySQLPromisePool;
+		__sqlLog: sqlLog,
+	} as unknown as MockMysqlPool;
+
+	return pool;
 }
 
 async function buildApp(mysql: MySQLPromisePool) {
@@ -251,6 +266,59 @@ describe('POST /comments', () => {
 		expect(response.statusCode).toBe(400);
 		expect(response.json().error).toBe('TEXT_FLOOD');
 	});
+
+	it('writes an in-app reply notification when the parent author is not the replier', async () => {
+		const parentMeta = {
+			id: 50,
+			parentId: null,
+			thingId: 7,
+			userId: 2,
+			statusId: 1,
+			createdAt: new Date(),
+		};
+		const replyContextRow = {
+			thingId: 7,
+			sectionIdentifier: 'sec',
+			positionInSection: 3,
+			authorUserId: 2,
+			authorLogin: 'parentauthor',
+			authorEmail: 'parent@example.com',
+			authorUserRights: 0,
+			authorGroupRights: 0,
+			authorNotifyOnReply: 1,
+		};
+
+		// Reply path query order:
+		// 1) getCommentMeta(parentId)
+		// 2) createComment (INSERT)
+		// 3) getCommentById (returned to client)
+		// 4) getCommentReplyContext
+		// 5) insertReplyNotification (INSERT INTO notification) — fire-and-forget
+		const mysql = createMockMysql(
+			[parentMeta],
+			{ insertId: 999, affectedRows: 1 },
+			[{ ...visibleRow, id: 999, parentId: 50, userId: 1 }],
+			[replyContextRow],
+			{ insertId: 123, affectedRows: 1 },
+		);
+		const app = await buildApp(mysql);
+		const token = await buildToken();
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/comments',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { parentId: 50, text: 'A reply' },
+		});
+
+		expect(response.statusCode).toBe(201);
+		// Allow the fire-and-forget notification promise to settle.
+		await new Promise((r) => setImmediate(r));
+
+		// Assert the notification INSERT was hit (cumulative SQL across all connections).
+		const allSql = mysql.__sqlLog.join('\n');
+		expect(allSql).toContain('INSERT INTO notification');
+	});
 });
 
 describe('PUT /comments/:commentId/vote', () => {
@@ -340,6 +408,56 @@ describe('PUT /comments/:commentId/vote', () => {
 		// Allow the fire-and-forget promise to settle
 		await new Promise((r) => setImmediate(r));
 		expect(sendEmail).toHaveBeenCalledOnce();
+	});
+
+	it('writes an in-app vote notification (bucket insert) even when the email toggle is off', async () => {
+		const { sendEmail } = await import('../../lib/email.js');
+		vi.mocked(sendEmail).mockClear();
+
+		// meta (authorId=2, not the voter sub=1), upsert, voteContext (toggle OFF),
+		// findUnreadVoteBucket (miss → empty), insertNotification, voteCounts, userVote
+		const mysql = createMockMysql(
+			[{ id: 10, userId: 2, thingId: 5, parentId: null, statusId: 1, createdAt: new Date() }],
+			[],
+			[{
+				authorUserId: 2,
+				thingId: 5,
+				parentId: null,
+				commentText: 'text',
+				authorDisplayName: 'author',
+				authorLogin: 'author',
+				authorEmail: 'author@example.com',
+				authorUserRights: 0,
+				authorGroupRights: 0,
+				authorNotifyOnVote: 0,
+				sectionIdentifier: 'sec',
+				positionInSection: 3,
+			}],
+			[],
+			{ insertId: 77, affectedRows: 1 },
+			[{ likes: 1, dislikes: 0 }],
+			[{ vote: 1 }],
+		);
+		const app = await buildApp(mysql);
+		const token = await buildToken({ sub: 1 });
+
+		const response = await app.inject({
+			method: 'PUT',
+			url: '/comments/10/vote',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { vote: 'like' },
+		});
+
+		expect(response.statusCode).toBe(200);
+		// Allow the fire-and-forget notification promise to settle.
+		await new Promise((r) => setImmediate(r));
+
+		// Email toggle is off → no email sent.
+		expect(sendEmail).not.toHaveBeenCalled();
+
+		// But the notification insert HAS happened.
+		const allSql = mysql.__sqlLog.join('\n');
+		expect(allSql).toContain('INSERT INTO notification');
 	});
 
 	it('does not send a notification email on self-vote', async () => {

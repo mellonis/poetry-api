@@ -80,7 +80,7 @@ Fastify app using a plugin-based structure under `src/plugins/`:
 - **`swagger/`** — mounts OpenAPI docs at `/docs` via `@fastify/swagger` + `@fastify/swagger-ui`
 - **`sections/`** — routes prefixed `/sections`
 - **`thingsOfTheDay/`** — routes prefixed `/things-of-the-day`
-- **`users/`** — routes prefixed `/users` (change password, delete account, get/update notification settings). Sends `ADMIN_NOTIFY_EMAIL` on account deletion. `GET/PUT /:userId/notification-settings` — self-only (403 otherwise); returns/updates `{ notifyAuthorOnCommentReply, notifyAuthorOnCommentVote }` booleans
+- **`users/`** — routes prefixed `/users` (change password, delete account, get/update notification settings). Sends `ADMIN_NOTIFY_EMAIL` on account deletion. `GET/PUT /:userId/notification-settings` — self-only (403 otherwise); returns/updates `{ notifyAuthorOnCommentReply, notifyAuthorOnCommentVote }` booleans. `GET/PUT /:userId/notification-settings` is **deprecated**: each call logs `'Deprecated endpoint hit'`. Use `/notifications/settings` instead.
 - **`votes/`** — routes prefixed `/things` for voting
   - `PUT /:thingId/vote` — `verifyJwt` + `canVote`. Body `{ vote: 'like' | 'dislike' | null }` — `null` removes the vote. Returns the updated `{ likes, dislikes, userVote }` summary (same shape as the batch GET and comment-vote endpoints). Sends `ADMIN_NOTIFY_EMAIL` on every vote action including removal (fire-and-forget, includes thing title).
   - `GET /votes?thingIds=…` or `?sectionId=…` — `optionalVerifyJwt`. Batch summaries keyed by thingId-as-string: `{ "1": { likes, dislikes, userVote }, ... }`. Anonymous → `userVote: null`. Schema enforces *exactly one* of `thingIds` (1..100 unique positive int ids, comma-separated) or `sectionId` (`section.identifier`, max 64 chars, `[A-Za-z0-9_-]`). `thingIds` mode pre-fills zero summaries for ids with no vote rows so callers get a stable shape. `sectionId` mode joins `v_things_info` to cover every thing in the section (zero-filled for unvoted) and avoids client-side chunking on big `/sections/[id]/all` pages. Vote totals are global (a thing's votes don't change by section).
@@ -94,6 +94,12 @@ Fastify app using a plugin-based structure under `src/plugins/`:
   - Sanitization: `sanitizeCommentText.ts` (NFC normalize → CRLF→LF → strip control chars → collapse blank-line runs → trim → length 2–4000 → flood reject). Plain-text only; renderers must escape on output
   - Reply notification: deep-link URL points to the parent (top-level), since pagination is on top-level. Shape: `<origin>/sections/<sectionIdentifier>/<positionInSection>?thread=<parentId>` for thing comments, `<origin>/guestbook?thread=<parentId>` for guestbook (no trailing slash before `?` — nextjs convention). Single-thread mode is drift-proof — the link still works regardless of how many comments accumulate later. Frontend reads `?thread=…` and renders only that top-level + its replies via `GET /comments/:commentId`
   - Moderation routes live in `cms/commentsCmsRoutes.ts` (registered by `cmsPlugin`, gated by editor + `canEditContent`): `GET /cms/comments`, `POST /cms/comments/:commentId/{hide,delete,restore}`, `DELETE /cms/comments/:commentId` (hard delete). Hide/delete on a comment auto-resolves any open `comment_report` rows for it
+- **`notifications/`** — routes prefixed `/notifications`. All endpoints require `verifyJwt`; recipient is implicit (`r_user_id = request.user.sub`) so users only ever see and mutate their own inbox. Endpoints:
+  - `GET /summary` — `{ unreadCount: number }`, used by the FE polling badge.
+  - `GET /` — paginated list with `?cursor&limit&unreadOnly`. Cursor is a base64url `<updatedAtMs>_<id>` token (see `lib/cursor.ts`). Visibility-filtered: notifications referring to non-Visible (Hidden/Deleted) comments are omitted from both list and summary; restoring a comment makes its notifications reappear.
+  - `POST /:id/read`, `POST /read-all`, `DELETE /:id` — state mutations. 404 (not 403) if the id isn't the caller's, to avoid existence disclosure.
+  - `GET/PUT /settings` — canonical replacement for `/users/:userId/notification-settings`. Returns/updates `{ notifyAuthorOnCommentReply, notifyAuthorOnCommentVote }`.
+  - Issuance lives in `lib/notifications.ts` (called from `comments.ts` on reply/vote): writes the in-app row unconditionally, then sends email iff the per-event toggle is true. Vote events use a per-(comment, unread) bucket — successive votes increment `event_count` until the recipient marks the bucket read.
 - **`@fastify/rate-limit`** — registered globally with `global: false`; routes opt in via `config: { rateLimit: { max, timeWindow } }`. In-memory store (no Redis), keyed by IP (the rate-limit hook runs before `verifyJwt`)
 - **`search/`** — Meilisearch integration. `search.ts` is a `fastify-plugin` that decorates `fastify.meiliClient` (nullable — `null` when `MEILI_MASTER_KEY` is not set). `searchRoutes.ts` provides public `GET /search?q=&limit=&offset=` (always filters `statusId=2`). `searchSync.ts` has `syncThingToSearch` / `deleteThingFromSearch` / `reindexAll`. `textStripping.ts` strips BBCode tags and `{note}` markers for indexing. CMS thing mutations fire-and-forget sync to Meilisearch after DB write. **Index versioning:** `INDEX_VERSION` constant in `search.ts` tracks the indexing schema version. On startup, the plugin compares it against the version stored in a `_meta` Meilisearch index. If they differ, a full reindex runs automatically. Bump `INDEX_VERSION` when changing stripping logic, indexed fields, or document shape.
 - **`cms/`** — routes prefixed `/cms`. Two-layer auth: all routes require `verifyJwt` + editor role (`isEditor`); mutations require `canEditContent` right (bit 12). Shared hook in `hooks.ts`. Sub-plugins:
@@ -115,10 +121,12 @@ Each route plugin is split into: `*.ts` (handler), `schemas.ts`, `queries.ts`, `
 Shared utilities in `src/lib/`:
 - `schemas.ts` — Zod schemas (shared `thingSchema`, `errorResponse`)
 - `queries.ts` — SQL fragments (thing fields, user vote field)
+- `cursor.ts` — keyset-pagination cursor codec (`encodeCursor`/`decodeCursor`). Used by `/notifications` list.
 - `mappers.ts` — row mappers (`mapThingBaseRow`, `splitLines`, `parseJSON`, `thingDisplayTitle`)
 - `isoDate.ts` — date format conversion at the wire boundary (`dbDateToIso`, `isoDateToDb`, `isValidIsoDate`)
 - `databaseHelpers.ts` — `withConnection` (pool acquire/release)
 - `email.ts` — SMTP transport via nodemailer
+- `notifications.ts` — `notifyCommentReply` / `notifyCommentVote` fire-and-forget orchestrators; in-app row insert + gated email send. Vote bucket upsert with `SELECT … FOR UPDATE` inside a transaction.
 - `emailTemplates.ts` — email templates:
 
   | Template | Recipient | Trigger |
@@ -135,6 +143,8 @@ Shared utilities in `src/lib/`:
   | `commentReportedEmail` | `ADMIN_NOTIFY_EMAIL` | user reported a comment |
   | `commentReplyEmail` | parent comment author | someone replied to their comment (skipped on self-reply, deleted author, banned) |
   | `commentVoteEmail` | comment author | someone liked/disliked their comment (skipped on self-vote, vote removal, deleted author, banned) |
+
+  The `commentReplyEmail` and `commentVoteEmail` recipients are gated by `auth_user.notify_author_on_comment_reply` / `notify_author_on_comment_vote`. As of in-app notifications (Phase 1), those toggles control **only the email** — the in-app feed row is always inserted (subject to the unchanged skip rules: self-action, banned recipient, deleted-author origin).
 - `maskEmail.ts` — masks emails for logging
 - `authNotifier/` — `AuthNotifier` interface, `EmailAuthNotifier` (production), `ConsoleAuthNotifier` (dev)
 
