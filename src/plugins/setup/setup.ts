@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { hasZodFastifySchemaValidationErrors } from 'fastify-type-provider-zod';
@@ -16,6 +17,12 @@ import {
 } from './queries.js';
 
 const BCRYPT_COST = 10;
+
+// Constant-time comparison of the setup secret. Both sides are hashed to
+// equal-length digests first so timingSafeEqual never throws on a length
+// mismatch and the comparison leaks neither the value nor its length.
+const secretsMatch = (a: string, b: string): boolean =>
+  timingSafeEqual(createHash('sha256').update(a).digest(), createHash('sha256').update(b).digest());
 
 export async function setupPlugin(fastify: FastifyInstance) {
   fastify.setErrorHandler((err, _request, reply) => {
@@ -74,7 +81,7 @@ export async function setupPlugin(fastify: FastifyInstance) {
         return reply.code(409).send({ error: 'already_initialized' as const });
       }
 
-      if (request.body.secret !== expected) {
+      if (!secretsMatch(request.body.secret, expected)) {
         request.log.warn('setup: secret mismatch');
         return reply.code(401).send({ error: 'wrong_secret' as const });
       }
