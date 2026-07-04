@@ -55,10 +55,23 @@ import {
 	meResponse,
 } from './schemas.js';
 
+// Per-IP rate limits (in-memory store; verified editors/admins bypass via the
+// allowList in index.ts). Sized to allow legitimate retries while throttling
+// password brute-force on /login and email-send abuse on the routes that send
+// mail (register, resend-activation, request-password-reset).
+const LOGIN_RATE_LIMIT = { max: 10, timeWindow: '1 minute' };
+const REFRESH_RATE_LIMIT = { max: 30, timeWindow: '1 minute' };
+const REGISTER_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
+const ACTIVATE_RATE_LIMIT = { max: 10, timeWindow: '1 minute' };
+const RESEND_ACTIVATION_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
+const REQUEST_PASSWORD_RESET_RATE_LIMIT = { max: 5, timeWindow: '1 minute' };
+const RESET_PASSWORD_RATE_LIMIT = { max: 10, timeWindow: '1 minute' };
+
 export async function authRoutesPlugin(fastify: FastifyInstance) {
 	fastify.log.info('[PLUGIN] Registering: authRoutes...');
 
 	fastify.post('/login', {
+		config: { rateLimit: LOGIN_RATE_LIMIT },
 		schema: {
 			description: 'Authenticate with login and password. Returns JWT access and refresh tokens.',
 			tags: ['Auth'],
@@ -115,6 +128,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 	});
 
 	fastify.post('/refresh', {
+		config: { rateLimit: REFRESH_RATE_LIMIT },
 		schema: {
 			description: 'Exchange a valid refresh token for a new access/refresh token pair.',
 			tags: ['Auth'],
@@ -177,6 +191,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 	});
 
 	fastify.post('/register', {
+		config: { rateLimit: REGISTER_RATE_LIMIT },
 		schema: {
 			description: 'Create a new user account and send an activation email.',
 			tags: ['Auth'],
@@ -224,6 +239,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 	});
 
 	fastify.post('/activate', {
+		config: { rateLimit: ACTIVATE_RATE_LIMIT },
 		schema: {
 			description: 'Activate a user account using the key from the activation email.',
 			tags: ['Auth'],
@@ -265,6 +281,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 	});
 
 	fastify.post('/resend-activation', {
+		config: { rateLimit: RESEND_ACTIVATION_RATE_LIMIT },
 		schema: {
 			description: 'Resend the activation email for an unactivated account.',
 			tags: ['Auth'],
@@ -300,6 +317,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 	});
 
 	fastify.post('/request-password-reset', {
+		config: { rateLimit: REQUEST_PASSWORD_RESET_RATE_LIMIT },
 		schema: {
 			description: 'Request a password reset email for the given email address.',
 			tags: ['Auth'],
@@ -320,7 +338,13 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 					await updateUserRightsAndKey(fastify.mysql, user.userId, newRights, key);
 					request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Password reset requested');
 
-					await fastify.authNotifier.sendPasswordReset(user.email, user.login, key, fastify.resolveOrigin(request));
+					// Swallow notifier errors so a failed send can't turn into a 500
+					// for existing accounts only — that would leak which emails exist.
+					try {
+						await fastify.authNotifier.sendPasswordReset(user.email, user.login, key, fastify.resolveOrigin(request));
+					} catch (notifierError) {
+						fastify.log.error({ email: maskEmail(user.email), err: notifierError }, 'Failed to send password reset email');
+					}
 				}
 
 				return { message: 'If an account exists, a password reset link has been sent' };
@@ -332,6 +356,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 	});
 
 	fastify.post('/reset-password', {
+		config: { rateLimit: RESET_PASSWORD_RATE_LIMIT },
 		schema: {
 			description: 'Set a new password using the key from the reset email.',
 			tags: ['Auth'],

@@ -22,8 +22,12 @@ import searchPlugin from './plugins/search/search.js';
 import { searchRoutes } from './plugins/search/searchRoutes.js';
 import { healthPlugin } from './plugins/health/health.js';
 import { setupPlugin } from './plugins/setup/setup.js';
+import { isRateLimitExempt } from './plugins/auth/rateLimitAllowList.js';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
+
+// Same secret encoding as auth.ts (which validates JWT_SECRET at startup).
+const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET ?? '');
 
 const fastify: FastifyInstance = Fastify({
 	logger: process.env.NODE_ENV === 'production'
@@ -40,6 +44,10 @@ const fastify: FastifyInstance = Fastify({
 		}
 		: { transport: { target: 'pino-pretty' } },
 	genReqId: (req) => (req.headers['x-request-id'] as string) || randomUUID(),
+	// Trust exactly one proxy hop (nginx). Makes request.ip the real client
+	// IP from X-Forwarded-For so per-IP rate limiting works; `1` (not `true`)
+	// prevents a client from spoofing X-Forwarded-For to evade the limit.
+	trustProxy: 1,
 });
 
 fastify.addHook('onSend', async (request, reply) => {
@@ -64,37 +72,22 @@ fastify.register(cors, {
 // is not yet populated; auth-gated routes still get the auth check on top.
 // errorResponseBuilder localizes the 429 body for our (Russian) clients.
 //
-// `skip` decodes the JWT to bypass rate-limiting for editors/admins. Decode
-// only — signature is NOT verified here (verifyJwt does that later). A forged
-// "isEditor: true" token would still fail verifyJwt and never reach the
-// handler, so the skip is safe to base on the unverified payload.
+// `allowList` lets verified editors/admins bypass rate-limiting. The token
+// signature MUST be verified here, not just decoded: some rate-limited routes
+// (e.g. POST /setup/admin, gated only by a body secret) never run verifyJwt,
+// so a forged "isAdmin: true" payload would otherwise skip the limiter and
+// keep brute-forcing. Verifying the signature makes the skip trustworthy on
+// its own, independent of whether the route runs verifyJwt.
 fastify.register(rateLimit, {
 	global: false,
+	// English message + stable `error` code, matching the rest of poetry-api;
+	// clients localize from the code. `ttl` is surfaced for a countdown UI.
 	errorResponseBuilder: (_req, ctx) => ({
 		statusCode: 429,
 		error: 'rate_limited',
-		message: `Слишком часто. Попробуйте через ${Math.ceil(ctx.ttl / 1000)} с.`,
+		message: `Too many requests. Try again in ${Math.ceil(ctx.ttl / 1000)}s.`,
 	}),
-	allowList: (request) => {
-		const auth = request.headers.authorization;
-
-		if (!auth?.startsWith('Bearer ')) return false;
-
-		try {
-			const part = auth.substring(7).split('.')[1];
-
-			if (!part) return false;
-
-			const payload = JSON.parse(Buffer.from(part, 'base64url').toString('utf8')) as {
-				isEditor?: boolean;
-				isAdmin?: boolean;
-			};
-
-			return payload.isEditor === true || payload.isAdmin === true;
-		} catch {
-			return false;
-		}
-	},
+	allowList: (request) => isRateLimitExempt(request, jwtSecret),
 });
 fastify.register(databasePlugin);
 fastify.register(healthPlugin);
