@@ -90,11 +90,11 @@ export async function votesPlugin(fastify: FastifyInstance) {
 				}
 
 				if (ADMIN_NOTIFY_EMAIL) {
-					getThingTitle(fastify.mysql, thingId).then((title) => {
-						sendEmail(ADMIN_NOTIFY_EMAIL, thingVotedEmail(login, title, dbVote));
-					}).catch((err) => {
-						request.log.warn(err, 'Vote notification email failed');
-					});
+					getThingTitle(fastify.mysql, thingId)
+						.then((title) => sendEmail(ADMIN_NOTIFY_EMAIL, thingVotedEmail(login, title, dbVote)))
+						.catch((err) => {
+							request.log.warn(err, 'Vote notification email failed');
+						});
 				}
 
 				return await getVoteSummary(fastify.mysql, thingId, userId);
