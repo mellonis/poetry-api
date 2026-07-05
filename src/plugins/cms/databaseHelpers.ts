@@ -276,6 +276,8 @@ export interface CmsThingItem {
 	thingId: number;
 	title: string | null;
 	firstLines: string[] | null;
+	editingDoneAt: string | null;
+	lastModified: string | null;
 }
 
 export interface CmsSectionThing extends CmsThingItem {
@@ -288,6 +290,8 @@ const mapCmsThingRow = (row: MySQLRowDataPacket): CmsThingItem => ({
 	firstLines: row.firstLines
 		? splitLines(row.firstLines as string)
 		: null,
+	editingDoneAt: (row.editingDoneAt as string) ?? null,
+	lastModified: (row.lastModified as string) ?? null,
 });
 
 const mapCmsSectionThingRow = (row: MySQLRowDataPacket): CmsSectionThing => ({
@@ -424,6 +428,8 @@ export interface CmsThing {
 	firstLines: string | null;
 	firstLinesAutoGenerating: boolean;
 	excludeFromDaily: boolean;
+	editingDoneAt: string | null;
+	lastModified: string | null;
 	notes: CmsThingNote[];
 	seoDescription: string | null;
 	seoKeywords: string | null;
@@ -464,6 +470,8 @@ export const getCmsThing = async (mysql: MySQLPromisePool, thingId: number): Pro
 			firstLines: (row.firstLines as string) ?? null,
 			firstLinesAutoGenerating: Boolean(row.firstLinesAutoGenerating),
 			excludeFromDaily: Boolean(row.excludeFromDaily),
+			editingDoneAt: (row.editingDoneAt as string) ?? null,
+			lastModified: (row.lastModified as string) ?? null,
 			notes: noteRows.map((n) => ({ id: n.id as number, text: n.text as string })),
 			seoDescription: (row.seoDescription as string) ?? null,
 			seoKeywords: (row.seoKeywords as string) ?? null,
@@ -477,6 +485,7 @@ export const createThing = async (
 		title: string | null; text: string; categoryId: number; statusId: number;
 		startDate: string | null; finishDate: string;
 		firstLines: string | null; firstLinesAutoGenerating: boolean; excludeFromDaily: boolean;
+		editingDone: boolean;
 		notes: { text: string }[];
 		seoDescription: string | null; seoKeywords: string | null; info: string | null;
 	},
@@ -489,6 +498,7 @@ export const createThing = async (
 				data.startDate ? isoDateToDb(data.startDate) : null,
 				isoDateToDb(data.finishDate),
 				data.firstLines, data.firstLinesAutoGenerating ? 1 : 0, data.excludeFromDaily ? 1 : 0,
+				data.editingDone ? 1 : 0,
 			]);
 			const thingId = result.insertId;
 
@@ -519,6 +529,7 @@ export const updateThing = async (
 		title?: string | null; text?: string; categoryId?: number; statusId?: number;
 		startDate?: string | null; finishDate?: string;
 		firstLines?: string | null; firstLinesAutoGenerating?: boolean; excludeFromDaily?: boolean;
+		editingDone?: boolean;
 		notes?: { id?: number; text: string }[];
 		seoDescription?: string | null; seoKeywords?: string | null; info?: string | null;
 	},
@@ -539,6 +550,7 @@ export const updateThing = async (
 				data.firstLines !== undefined ? data.firstLines : current.firstLines,
 				(data.firstLinesAutoGenerating ?? current.firstLinesAutoGenerating) ? 1 : 0,
 				(data.excludeFromDaily ?? current.excludeFromDaily) ? 1 : 0,
+				data.editingDone === undefined ? 0 : data.editingDone ? 1 : -1,
 				thingId,
 			]);
 

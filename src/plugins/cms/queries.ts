@@ -102,7 +102,9 @@ export const cmsSectionThingsQuery = `
 		ti.r_thing_id                  AS thingId,
 		ti.thing_position_in_section   AS position,
 		t.title,
-		t.first_lines                  AS firstLines
+		t.first_lines                  AS firstLines,
+		DATE_FORMAT(t.last_modified, '%Y-%m-%dT%H:%i:%s')   AS lastModified,
+		DATE_FORMAT(t.editing_done_at, '%Y-%m-%dT%H:%i:%s') AS editingDoneAt
 	FROM thing_identifier ti
 	JOIN thing t ON ti.r_thing_id = t.id
 	WHERE ti.r_section_id = ?
@@ -143,7 +145,9 @@ export const allThingsQuery = `
 	SELECT
 		t.id          AS thingId,
 		t.title,
-		t.first_lines AS firstLines
+		t.first_lines AS firstLines,
+		DATE_FORMAT(t.last_modified, '%Y-%m-%dT%H:%i:%s')   AS lastModified,
+		DATE_FORMAT(t.editing_done_at, '%Y-%m-%dT%H:%i:%s') AS editingDoneAt
 	FROM thing t
 	ORDER BY t.id DESC;
 `;
@@ -199,6 +203,8 @@ export const cmsThingByIdQuery = `
 		t.first_lines                  AS firstLines,
 		t.first_lines_auto_generating  AS firstLinesAutoGenerating,
 		t.exclude_from_daily           AS excludeFromDaily,
+		DATE_FORMAT(t.last_modified, '%Y-%m-%dT%H:%i:%s')   AS lastModified,
+		DATE_FORMAT(t.editing_done_at, '%Y-%m-%dT%H:%i:%s') AS editingDoneAt,
 		ts.description                 AS seoDescription,
 		ts.keywords                    AS seoKeywords,
 		ti.text                        AS info
@@ -214,8 +220,8 @@ export const thingNotesQuery = `
 
 export const createThingQuery = `
 	INSERT INTO thing (title, text, r_thing_category_id, r_thing_status_id, start_date, finish_date,
-		first_lines, first_lines_auto_generating, exclude_from_daily, last_modified)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW());
+		first_lines, first_lines_auto_generating, exclude_from_daily, last_modified, editing_done_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), IF(?, NOW(), NULL));
 `;
 
 export const updateThingQuery = `
@@ -223,6 +229,7 @@ export const updateThingQuery = `
 		title = ?, text = ?, r_thing_category_id = ?, r_thing_status_id = ?,
 		start_date = ?, finish_date = ?,
 		first_lines = ?, first_lines_auto_generating = ?, exclude_from_daily = ?,
+		editing_done_at = CASE ? WHEN 1 THEN NOW() WHEN -1 THEN NULL ELSE editing_done_at END,
 		last_modified = NOW()
 	WHERE id = ?;
 `;
