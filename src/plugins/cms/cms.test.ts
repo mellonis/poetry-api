@@ -524,6 +524,75 @@ describe('POST /cms/things — date format', () => {
 	});
 });
 
+describe('PUT /cms/things/:thingId — editingDone semantics', () => {
+	const thingRow = (editingDoneAt: string | null, lastModified: string | null) => ({
+		id: 7, title: 'T', text: 'body', categoryId: 1, statusId: 2,
+		startDate: null, finishDate: '2026-01-01', firstLines: null,
+		firstLinesAutoGenerating: 0, excludeFromDaily: 0,
+		editingDoneAt, lastModified,
+		seoDescription: null, seoKeywords: null, info: null,
+	});
+
+	function createRecordingMysql(...responses: Record<string, unknown>[][]) {
+		let callIndex = 0;
+		const calls: { sql: string; params: unknown[] }[] = [];
+		const pool = {
+			getConnection: vi.fn().mockImplementation(() =>
+				Promise.resolve({
+					query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+						calls.push({ sql, params: params ?? [] });
+						return Promise.resolve([responses[callIndex++] ?? []]);
+					}),
+					beginTransaction: vi.fn().mockResolvedValue(undefined),
+					commit: vi.fn().mockResolvedValue(undefined),
+					rollback: vi.fn().mockResolvedValue(undefined),
+					release: vi.fn(),
+				})
+			),
+		} as unknown as MySQLPromisePool;
+		return { pool, calls };
+	}
+
+	const putThing = async (body: Record<string, unknown>, current = thingRow(null, '2026-07-01T10:00:00'), updated = thingRow('2026-07-05T12:00:00', '2026-07-05T12:00:00')) => {
+		const { pool, calls } = createRecordingMysql(
+			[current], [],        // getCmsThing (current) + notes
+			[],                    // updateThingQuery
+			[updated], [],         // getCmsThing (refetch) + notes
+		);
+		const app = await buildApp(pool);
+		const token = await getEditorToken();
+		const res = await app.inject({
+			method: 'PUT', url: '/cms/things/7',
+			headers: { authorization: `Bearer ${token}` },
+			payload: body,
+		});
+		return { res, calls };
+	};
+
+	it('editingDone: true binds the stamp param 1 and returns the stamped thing', async () => {
+		const { res, calls } = await putThing({ editingDone: true });
+		expect(res.statusCode).toBe(200);
+		const update = calls.find((c) => c.sql.includes('UPDATE thing SET'));
+		expect(update!.params[9]).toBe(1); // tri-state param after the 9 field bindings
+		const body = res.json();
+		expect(body.editingDoneAt).toBe('2026-07-05T12:00:00');
+		expect(body.lastModified).toBe('2026-07-05T12:00:00');
+		expect(body.editingDoneAt).toBe(body.lastModified);
+	});
+
+	it('editingDone: false binds -1 (clear)', async () => {
+		const { calls } = await putThing({ editingDone: false }, thingRow('2026-07-01T10:00:00', '2026-07-01T10:00:00'), thingRow(null, '2026-07-05T12:00:00'));
+		const update = calls.find((c) => c.sql.includes('UPDATE thing SET'));
+		expect(update!.params[9]).toBe(-1);
+	});
+
+	it('editingDone omitted binds 0 (leave untouched)', async () => {
+		const { calls } = await putThing({ text: 'new body' });
+		const update = calls.find((c) => c.sql.includes('UPDATE thing SET'));
+		expect(update!.params[9]).toBe(0);
+	});
+});
+
 // --- User management ---
 
 const userRow = {
