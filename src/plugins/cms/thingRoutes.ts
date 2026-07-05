@@ -158,7 +158,7 @@ export async function thingRoutes(fastify: FastifyInstance) {
 				const updated = await getCmsThing(fastify.mysql, request.params.thingId);
 
 				request.log.info({ actorFingerprint: actorFingerprint(request.user!.sub), thingId: request.params.thingId }, 'Thing updated');
-				if (request.body.editingDone !== undefined) {
+				if (request.body.editingDone !== undefined && (request.body.editingDone || current.editingDoneAt !== null)) {
 					request.log.info({ actorFingerprint: actorFingerprint(request.user!.sub), thingId: request.params.thingId, editingDone: request.body.editingDone }, 'Thing editorial-pass flag updated');
 				}
 				if (fastify.meiliClient) {
@@ -203,7 +203,7 @@ export async function thingRoutes(fastify: FastifyInstance) {
 				}
 
 				await deleteThing(fastify.mysql, request.params.thingId);
-				request.log.info({ thingId: request.params.thingId }, 'Thing deleted');
+				request.log.info({ actorFingerprint: actorFingerprint(request.user!.sub), thingId: request.params.thingId }, 'Thing deleted');
 				if (fastify.meiliClient) {
 					deleteThingFromSearch(fastify.meiliClient, request.params.thingId, request.log)
 						.catch((err) => request.log.error(err, 'Meilisearch delete failed'));
