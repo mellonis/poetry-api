@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	cmsThingResponse,
 	createSectionRequest,
 	createThingRequest,
 	updateAuthorRequest,
@@ -124,5 +125,34 @@ describe('createSectionRequest / updateSectionRequest normalization', () => {
 	it('updateSectionRequest normalizes optional fields', () => {
 		const parsed = updateSectionRequest.parse({ title: 'A -- B' });
 		expect(parsed.title).toBe('A – B');
+	});
+});
+
+describe('editingDone wire fields', () => {
+	it('createThingRequest defaults editingDone to false', () => {
+		const parsed = createThingRequest.parse({ text: 'x', categoryId: 1, finishDate: '2026-01-01' });
+		expect(parsed.editingDone).toBe(false);
+	});
+
+	it('updateThingRequest keeps editingDone undefined when omitted', () => {
+		const parsed = updateThingRequest.parse({});
+		expect(parsed.editingDone).toBeUndefined();
+	});
+
+	it('updateThingRequest accepts editingDone true/false', () => {
+		expect(updateThingRequest.parse({ editingDone: true }).editingDone).toBe(true);
+		expect(updateThingRequest.parse({ editingDone: false }).editingDone).toBe(false);
+	});
+
+	it('cmsThingResponse requires nullable editingDoneAt and lastModified', () => {
+		const base = {
+			id: 1, title: null, text: 't', categoryId: 1, statusId: 1,
+			startDate: null, finishDate: '2026-01-01', firstLines: null,
+			firstLinesAutoGenerating: false, excludeFromDaily: false,
+			notes: [], seoDescription: null, seoKeywords: null, info: null,
+		};
+		expect(() => cmsThingResponse.parse(base)).toThrow();
+		expect(cmsThingResponse.parse({ ...base, editingDoneAt: null, lastModified: null }).editingDoneAt).toBeNull();
+		expect(cmsThingResponse.parse({ ...base, editingDoneAt: '2026-07-05T10:00:00', lastModified: '2026-07-05T10:00:00' }).editingDoneAt).toBe('2026-07-05T10:00:00');
 	});
 });

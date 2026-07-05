@@ -91,6 +91,8 @@ export const cmsThingItem = z.object({
 	thingId: z.number().int(),
 	title: z.string().nullable(),
 	firstLines: z.array(z.string()).nullable(),
+	editingDoneAt: z.string().nullable(),
+	lastModified: z.string().nullable(),
 });
 
 export const cmsThingsResponse = z.array(cmsThingItem);
@@ -166,6 +168,8 @@ export const cmsThingResponse = z.object({
 	firstLines: z.string().nullable(),
 	firstLinesAutoGenerating: z.boolean(),
 	excludeFromDaily: z.boolean(),
+	editingDoneAt: z.string().nullable(),
+	lastModified: z.string().nullable(),
 	notes: z.array(z.object({ id: z.number().int(), text: z.string() })),
 	seoDescription: z.string().nullable(),
 	seoKeywords: z.string().nullable(),
@@ -186,6 +190,7 @@ export const createThingRequest = z.object({
 	firstLines: z.string().nullable().default(null).transform(norm),
 	firstLinesAutoGenerating: z.literal(false).default(false),
 	excludeFromDaily: z.boolean().default(false),
+	editingDone: z.boolean().default(false),
 	notes: z.array(thingNoteItem).default([]),
 	seoDescription: z.string().nullable().default(null),
 	seoKeywords: z.string().nullable().default(null),
@@ -202,6 +207,7 @@ export const updateThingRequest = z.object({
 	firstLines: z.string().nullable().optional().transform(norm),
 	firstLinesAutoGenerating: z.literal(false).optional(),
 	excludeFromDaily: z.boolean().optional(),
+	editingDone: z.boolean().optional(),
 	notes: z.array(thingNoteItem).optional(),
 	seoDescription: z.string().nullable().optional(),
 	seoKeywords: z.string().nullable().optional(),
