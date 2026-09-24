@@ -26,6 +26,7 @@ import { searchRoutes } from './plugins/search/searchRoutes.js';
 import { healthPlugin } from './plugins/health/health.js';
 import { setupPlugin } from './plugins/setup/setup.js';
 import { isRateLimitExempt } from './plugins/auth/rateLimitAllowList.js';
+import { mcpPlugin } from './plugins/mcp/mcp.js';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 
@@ -117,6 +118,7 @@ fastify.register(authorPlugin, { prefix: '/author' });
 fastify.register(cmsPlugin, { prefix: '/cms' });
 fastify.register(commentsPlugin, { prefix: '/comments' });
 fastify.register(searchRoutes, { prefix: '/search' });
+fastify.register(mcpPlugin, { prefix: '/mcp' });
 
 async function main() {
 	await fastify.listen({
