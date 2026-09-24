@@ -65,3 +65,7 @@ export const setPasswordResetRequested = (userRights: number): number =>
 
 export const clearPasswordResetRequested = (userRights: number): number =>
 	userRights & ~(1 << RIGHT_BITS.passwordResetRequested);
+
+// auth_group ids the rights model treats specially; see docs/auth.md (rights bitmask).
+export const GROUP_ADMINS = 1;
+export const GROUP_EDITORS = 2;
