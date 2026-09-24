@@ -69,7 +69,7 @@ const rows: CatalogueRow[] = [
 	{ name: 'list_sections', level: 'public', method: 'GET', path: '/sections', title: 'List sections', annotations: READ,
 		description: 'Published sections of the site with type, title, annotation and thing count.', output: sectionsResponse },
 	{ name: 'get_section', level: 'public', method: 'GET', path: '/sections/:identifier', title: 'Section contents', annotations: READ,
-		description: 'Things of one section in reading order, without their text (use get_thing for a text).', params: identifierArg,
+		description: 'Things of one section in reading order, without their text (use get_thing for a thing\'s text).', params: identifierArg,
 		output: z.array(sectionThingSummary),
 		mapOutput: (value) => (value as { text?: unknown }[]).map((item) => {
 			const rest: Record<string, unknown> = { ...item };
@@ -105,7 +105,7 @@ const rows: CatalogueRow[] = [
 
 	// ---- editor: things ----
 	{ name: 'cms_list_things', level: 'editor', method: 'GET', path: '/cms/things', title: 'CMS: list things', annotations: READ,
-		description: 'Every thing with title, first lines, status, category and editingDoneAt (null = not proofread yet).', output: cmsThingsResponse },
+		description: 'Every thing with id, title, first lines, lastModified and editingDoneAt (null = not proofread yet). Use cms_get_thing for status, category, text and the rest.', output: cmsThingsResponse },
 	{ name: 'cms_get_thing', level: 'editor', method: 'GET', path: '/cms/things/:thingId', title: 'CMS: get thing for editing', annotations: READ,
 		description: 'Full editorial view of a thing: text, notes, SEO, info, review, dates, statuses, editingDoneAt, excludeFromDaily.' + THING_REFERENCE, params: thingIdArg, output: cmsThingResponse },
 	{ name: 'cms_create_thing', level: 'editor', method: 'POST', path: '/cms/things', title: 'CMS: create thing', annotations: {},
@@ -133,7 +133,7 @@ const rows: CatalogueRow[] = [
 	{ name: 'cms_restore_comment', level: 'editor', method: 'POST', path: '/cms/comments/:commentId/restore', title: 'CMS: restore comment', annotations: {},
 		description: 'Restore a hidden or deleted comment to visible (status 1).', params: commentIdArg, output: okResponse },
 	{ name: 'cms_hard_delete_comment', level: 'editor', method: 'DELETE', path: '/cms/comments/:commentId', title: 'CMS: hard-delete comment', annotations: DESTRUCTIVE,
-		description: 'Permanently delete a comment row with its replies, votes and reports. Use sparingly — prefer cms_delete_comment.', params: commentIdArg, output: 'none' },
+		description: 'Permanently delete a comment row with its replies, votes and reports. Use sparingly — prefer cms_delete_comment.', params: commentIdArg, output: okResponse },
 	{ name: 'cms_reindex_search', level: 'editor', method: 'POST', path: '/cms/search/reindex', title: 'CMS: reindex search', annotations: IDEMPOTENT,
 		description: 'Rebuild the full-text search index from the database.', output: z.object({ indexed: z.number().int() }) },
 
@@ -141,9 +141,9 @@ const rows: CatalogueRow[] = [
 	{ name: 'admin_list_groups', level: 'admin', method: 'GET', path: '/cms/groups', title: 'Admin: groups', annotations: READ,
 		description: 'Auth groups with their rights bitmask.' + GROUP_REFERENCE, output: cmsGroupsResponse },
 	{ name: 'admin_list_users', level: 'admin', method: 'GET', path: '/cms/users', title: 'Admin: users', annotations: READ,
-		description: 'All accounts with group, rights, activation and ban state; emails are masked.', output: cmsUsersResponse },
+		description: 'All accounts with group, rights, activation and ban state; emails are masked.' + GROUP_REFERENCE, output: cmsUsersResponse },
 	{ name: 'admin_get_user', level: 'admin', method: 'GET', path: '/cms/users/:userId', title: 'Admin: get user', annotations: READ,
-		description: 'One account by id.', params: userIdArg, output: cmsUserResponse },
+		description: 'One account by id.' + GROUP_REFERENCE, params: userIdArg, output: cmsUserResponse },
 	{ name: 'admin_create_user', level: 'admin', method: 'POST', path: '/cms/users', title: 'Admin: create user', annotations: {},
 		description: 'Create an account and send its activation email.' + GROUP_REFERENCE, body: createUserRequest, output: cmsUserResponse },
 	{ name: 'admin_update_user', level: 'admin', method: 'PUT', path: '/cms/users/:userId', title: 'Admin: update user', annotations: IDEMPOTENT,
