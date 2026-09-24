@@ -68,6 +68,7 @@ async function buildApp(mysql: MySQLPromisePool) {
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);
 	app.decorate('mysql', mysql);
+	app.decorate('revalidateContent', vi.fn());
 	app.decorate('authNotifier', mockNotifier);
 	app.decorate('resolveOrigin', () => 'https://test.example.com');
 	app.register(authPlugin);
@@ -620,6 +621,24 @@ describe('PUT /cms/things/:thingId — editingDone semantics', () => {
 		const { calls } = await putThing({ text: 'new body' });
 		const update = calls.find((c) => c.sql.includes('UPDATE thing SET'));
 		expect(update!.params[9]).toBe(0);
+	});
+
+	it('PUT /cms/things/:thingId fires cache revalidation', async () => {
+		// same mocked rows as the successful update test above
+		const { pool } = createRecordingMysql(
+			[thingRow(null, '2026-07-01T10:00:00')], [],
+			[],
+			[thingRow('2026-07-05T12:00:00', '2026-07-05T12:00:00')], [],
+		);
+		const app = await buildApp(pool);
+		const token = await getEditorToken();
+		const res = await app.inject({
+			method: 'PUT', url: '/cms/things/7',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { title: 'x' },
+		});
+		expect(res.statusCode).toBe(200);
+		expect(app.revalidateContent).toHaveBeenCalledTimes(1);
 	});
 });
 

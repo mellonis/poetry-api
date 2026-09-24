@@ -109,6 +109,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 
 				await addThingToSection(fastify.mysql, request.params.sectionId, request.body.thingId, request.body.position);
 				request.log.info({ sectionId: request.params.sectionId, thingId: request.body.thingId }, 'Thing added to section');
+				fastify.revalidateContent(request.log, request.id);
 				const things = await getCmsThingsInSection(fastify.mysql, request.params.sectionId);
 				return reply.code(201).send(things);
 			} catch (error) {
@@ -138,6 +139,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 			try {
 				await removeThingFromSection(fastify.mysql, request.params.sectionId, request.params.thingId);
 				request.log.info({ sectionId: request.params.sectionId, thingId: request.params.thingId }, 'Thing removed from section');
+				fastify.revalidateContent(request.log, request.id);
 				return reply.code(204).send();
 			} catch (error) {
 				request.log.error(error);
@@ -180,6 +182,7 @@ export async function sectionThingRoutes(fastify: FastifyInstance) {
 
 				await reorderThingsInSection(fastify.mysql, request.params.sectionId, request.body);
 				request.log.info({ sectionId: request.params.sectionId, count: request.body.length }, 'Things reordered');
+				fastify.revalidateContent(request.log, request.id);
 				return await getCmsThingsInSection(fastify.mysql, request.params.sectionId);
 			} catch (error) {
 				request.log.error(error);

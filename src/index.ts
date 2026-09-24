@@ -6,6 +6,7 @@ import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { sectionsPlugin } from './plugins/sections/sections.js';
 import { databasePlugin } from './plugins/database/database.js';
+import { revalidatePlugin } from './plugins/revalidate/revalidate.js';
 import { swaggerPlugin } from './plugins/swagger/swagger.js';
 import { thingsOfTheDayPlugin } from './plugins/thingsOfTheDay/thingsOfTheDay.js';
 import { authPlugin } from './plugins/auth/auth.js';
@@ -96,6 +97,7 @@ fastify.register(rateLimit, {
 	allowList: (request) => isRateLimitExempt(request, jwtSecret),
 });
 fastify.register(databasePlugin);
+fastify.register(revalidatePlugin);
 fastify.register(healthPlugin);
 fastify.register(setupPlugin);
 fastify.register(searchPlugin);

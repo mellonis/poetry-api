@@ -122,6 +122,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 				const section = await getCmsSectionById(fastify.mysql, id);
 
 				request.log.info({ sectionId: id }, 'Section created');
+				fastify.revalidateContent(request.log, request.id);
 				return reply.code(201).send(section);
 			} catch (error) {
 				if ((error as { code?: string }).code === 'ER_DUP_ENTRY') {
@@ -170,6 +171,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 				const updated = await getCmsSectionById(fastify.mysql, request.params.sectionId);
 
 				request.log.info({ sectionId: request.params.sectionId }, 'Section updated');
+				fastify.revalidateContent(request.log, request.id);
 				return updated;
 			} catch (error) {
 				request.log.error(error);
@@ -210,6 +212,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 
 				await deleteSection(fastify.mysql, request.params.sectionId);
 				request.log.info({ sectionId: request.params.sectionId }, 'Section deleted');
+				fastify.revalidateContent(request.log, request.id);
 				return reply.code(204).send();
 			} catch (error) {
 				request.log.error(error);
@@ -235,6 +238,7 @@ export async function sectionRoutes(fastify: FastifyInstance) {
 			try {
 				await reorderSections(fastify.mysql, request.body);
 				request.log.info({ count: request.body.length }, 'Sections reordered');
+				fastify.revalidateContent(request.log, request.id);
 				return await getCmsSections(fastify.mysql);
 			} catch (error) {
 				request.log.error(error);
