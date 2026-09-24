@@ -73,7 +73,12 @@ export async function patRoutesPlugin(fastify: FastifyInstance) {
 
 				const level = resolveAccountLevel(account);
 
-				if (level.banned || !levelAtLeast(level.level, request.body.scope)) {
+				if (level.banned) {
+					request.log.warn({ actorFingerprint: actorFingerprint(account.userId) }, 'Personal access token creation refused: account banned');
+					return reply.code(403).send({ error: 'forbidden', message: 'Account is banned' });
+				}
+
+				if (!levelAtLeast(level.level, request.body.scope)) {
 					request.log.warn({ actorFingerprint: actorFingerprint(account.userId), scope: request.body.scope }, 'Personal access token creation refused: scope above account level');
 					return reply.code(403).send({ error: 'forbidden', message: 'Requested scope exceeds your account rights' });
 				}

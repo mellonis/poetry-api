@@ -4,7 +4,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import type { MySQLPromisePool } from '@fastify/mysql';
 import { authPlugin } from '../auth.js';
 import { patRoutesPlugin } from './patRoutes.js';
-import { signAccessToken } from '../jwt.js';
+import { hashToken, signAccessToken } from '../jwt.js';
 
 const JWT_SECRET = 'test-jwt-secret-that-is-at-least-32-characters-long';
 const secret = new TextEncoder().encode(JWT_SECRET);
@@ -79,7 +79,7 @@ describe('POST /auth/tokens', () => {
 		expect(typeof body.createdAt).toBe('string');
 		const insert = calls.find((c) => /INSERT INTO auth_personal_access_token/.test(c.sql))!;
 		expect(insert.params[2]).toMatch(/^[0-9a-f]{64}$/);           // hash, not the token
-		expect(insert.params[2]).not.toBe(body.token);
+		expect(insert.params[2]).toBe(hashToken(body.token));
 		expect(insert.params[3]).toBe(2);
 	});
 
@@ -104,6 +104,20 @@ describe('POST /auth/tokens', () => {
 			payload: { name: 'x', scope: 'root' },
 		});
 		expect(res.statusCode).toBe(400);
+	});
+
+	it('refuses a banned account with 403', async () => {
+		const bannedUserRow = { ...editorUserRow, user_rights: 25 | 4 };
+		const { pool, calls } = createRecordingMysql([bannedUserRow]);
+		const app = await buildApp(pool);
+		const res = await app.inject({
+			method: 'POST', url: '/auth/tokens',
+			headers: { authorization: `Bearer ${await editorJwt()}` },
+			payload: { name: 'x', scope: 'read' },
+		});
+		expect(res.statusCode).toBe(403);
+		expect(res.json().error).toBe('forbidden');
+		expect(calls.some((c) => /INSERT/.test(c.sql))).toBe(false);
 	});
 });
 
