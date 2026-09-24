@@ -30,6 +30,7 @@ import {
 	updateLastLogin,
 	updateUserRightsAndKey,
 } from './databaseHelpers.js';
+import { deleteAllUserPersonalAccessTokens } from './pat/databaseHelpers.js';
 import { issueTokens } from './issueTokens.js';
 import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import {
@@ -386,6 +387,7 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 
 				await resetPassword(fastify.mysql, user.userId, passwordHash, newRights);
 				await deleteAllUserRefreshTokens(fastify.mysql, user.userId);
+				await deleteAllUserPersonalAccessTokens(fastify.mysql, user.userId);
 
 				request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Password reset completed');
 				return { message: 'Password reset successfully' };

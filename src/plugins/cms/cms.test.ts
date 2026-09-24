@@ -807,14 +807,15 @@ describe('PUT /cms/users/:userId', () => {
 	});
 
 	it('updates another user', async () => {
-		// Responses: getUserById, getGroups, updateCmsUser, bumpTokenVersion, deleteRefreshTokens, getUserById (refetch)
+		// Responses: getUserById, getGroups, updateCmsUser, bumpTokenVersion, deleteRefreshTokens, deletePersonalAccessTokens, getUserById (refetch)
 		const updatedRow = { ...userRow, groupId: 2, groupTitle: 'editors' };
 		const app = await buildApp(createMockMysql(
 			[userRow],
 			groupRows,
 			[], // update
 			[], // bump token
-			[], // delete tokens
+			[], // delete refresh tokens
+			[], // delete personal access tokens
 			[updatedRow],
 		));
 		const token = await getAdminToken();
@@ -827,6 +828,34 @@ describe('PUT /cms/users/:userId', () => {
 		});
 
 		expect(response.statusCode).toBe(200);
+	});
+
+	it('PUT /cms/users/:userId purges refresh tokens and personal access tokens', async () => {
+		// Responses: getUserById, getGroups, updateCmsUser, bumpTokenVersion, deleteRefreshTokens, deletePersonalAccessTokens, getUserById (refetch)
+		const updatedRow = { ...userRow, groupId: 2, groupTitle: 'editors' };
+		const { pool, calls } = createRecordingMysql(
+			[userRow],
+			groupRows,
+			[], // update
+			[], // bump token
+			[], // delete refresh tokens
+			[], // delete personal access tokens
+			[updatedRow], // refetch
+		);
+		const app = await buildApp(pool);
+		const token = await getAdminToken();
+
+		const response = await app.inject({
+			method: 'PUT',
+			url: '/cms/users/5',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { groupId: 2 },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const sqls = calls.map((c) => c.sql);
+		expect(sqls.some((s) => /token_version = token_version \+ 1/.test(s))).toBe(true);
+		expect(sqls.some((s) => /DELETE FROM auth_personal_access_token WHERE r_user_id/.test(s))).toBe(true);
 	});
 });
 

@@ -10,6 +10,7 @@ import {
 	bumpTokenVersionQuery,
 } from './userQueries.js';
 import { deleteAllUserRefreshTokensQuery } from '../auth/queries.js';
+import { deleteAllUserPersonalAccessTokensQuery } from '../auth/pat/queries.js';
 
 // --- Types ---
 
@@ -98,6 +99,7 @@ export const invalidateUserSessions = async (mysql: MySQLPromisePool, userId: nu
 		try {
 			await connection.query(bumpTokenVersionQuery, [userId]);
 			await connection.query(deleteAllUserRefreshTokensQuery, [userId]);
+			await connection.query(deleteAllUserPersonalAccessTokensQuery, [userId]);
 			await connection.commit();
 		} catch (error) {
 			await connection.rollback();

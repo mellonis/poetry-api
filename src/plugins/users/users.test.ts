@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import type { MySQLPromisePool } from '@fastify/mysql';
+import bcrypt from 'bcryptjs';
 import { authPlugin } from '../auth/auth.js';
 import { usersPlugin } from './users.js';
 import { signAccessToken } from '../auth/jwt.js';
@@ -34,6 +35,23 @@ function createMockMysql(...responses: Record<string, unknown>[][]): MySQLPromis
 			})
 		),
 	} as unknown as MySQLPromisePool;
+}
+
+function createRecordingMysql(...responses: unknown[]) {
+	let callIndex = 0;
+	const calls: { sql: string; params: unknown[] }[] = [];
+	const pool = {
+		getConnection: vi.fn().mockImplementation(() =>
+			Promise.resolve({
+				query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+					calls.push({ sql, params: params ?? [] });
+					return Promise.resolve([responses[callIndex++] ?? []]);
+				}),
+				release: vi.fn(),
+			}),
+		),
+	} as unknown as MySQLPromisePool;
+	return { pool, calls };
 }
 
 async function buildApp(mysql: MySQLPromisePool) {
@@ -80,6 +98,29 @@ describe('PATCH /users/:userId/password', () => {
 		});
 
 		expect(response.statusCode).toBe(403);
+	});
+
+	it('purges personal access tokens after a password change', async () => {
+		const { pool, calls } = createRecordingMysql(
+			[{ password_hash: bcrypt.hashSync('oldpass', 10), email: 'u@example.test' }], // getUserCredentials
+			[], // updatePassword
+			[], // deleteAllUserRefreshTokens
+			[], // deleteAllUserPersonalAccessTokens
+		);
+		const app = await buildApp(pool);
+		const token = await getToken();
+
+		const response = await app.inject({
+			method: 'PATCH',
+			url: '/users/1/password',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { currentPassword: 'oldpass', newPassword: 'newpass123' },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const sqls = calls.map((c) => c.sql);
+		expect(sqls.some((s) => /DELETE FROM auth_refresh_token WHERE r_user_id/.test(s))).toBe(true);
+		expect(sqls.some((s) => /DELETE FROM auth_personal_access_token WHERE r_user_id/.test(s))).toBe(true);
 	});
 });
 
