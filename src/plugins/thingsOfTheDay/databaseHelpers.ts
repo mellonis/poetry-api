@@ -4,7 +4,7 @@ import type { ThingsOfTheDay } from './schemas.js';
 import { mapThingBaseRow } from '../../lib/mappers.js';
 import { withConnection } from '../../lib/databaseHelpers.js';
 
-const groupByThingId = (rows: MySQLRowDataPacket[]): ThingsOfTheDay[] => {
+export const groupByThingId = (rows: MySQLRowDataPacket[]): ThingsOfTheDay[] => {
 	const map = new Map<number, ThingsOfTheDay>();
 	const sectionIdSets = new Map<number, Set<string>>();
 
