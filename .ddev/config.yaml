@@ -31,6 +31,9 @@ web_environment:
   - MEILI_MASTER_KEY=dev-master-key-change-me
   - LOG_HMAC_KEY_CURRENT=dev-placeholder-do-not-use-in-prod-this-is-only-for-local-tests
   - INITIAL_ADMIN_PASSWORD=dev-initial-admin-secret-change-me
+  - REVALIDATION_SECRET=dev-revalidation-secret-change-me
+  - NEXTJS_REVALIDATE_URL=http://poetry-nextjs:3000/api/revalidate
+  - WWW_REVALIDATE_URL=http://poetry-old2/revalidate.php
 hooks:
   pre-start:
     - exec-host: docker network inspect poetry-ddev >/dev/null 2>&1 || docker network create poetry-ddev

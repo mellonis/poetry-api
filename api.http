@@ -486,3 +486,48 @@ Authorization: Bearer {{login.response.body.accessToken}}
 ### Hard-delete a comment row (cascades replies/votes/reports)
 DELETE {{host}}/cms/comments/1
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### ---- Personal access tokens (JWT session) ----
+
+### List my tokens
+GET {{host}}/auth/tokens
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### Create a token (scope: read | editor | admin, capped by the account)
+# @name pat
+POST {{host}}/auth/tokens
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{"name": "Claude Code", "scope": "editor"}
+
+### Revoke a token
+DELETE {{host}}/auth/tokens/1
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### ---- MCP (personal access token only) ----
+
+### tools/list — anonymous: public tools only
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{"jsonrpc":"2.0","id":1,"method":"tools/list"}
+
+### tools/list — with a token
+POST {{host}}/mcp
+Authorization: Bearer {{pat.response.body.token}}
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{"jsonrpc":"2.0","id":1,"method":"tools/list"}
+
+### tools/call — get_thing
+POST {{host}}/mcp
+Content-Type: application/json
+Accept: application/json, text/event-stream
+
+{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_thing","arguments":{"thingId":1}}}
+
+### Public thing by id
+GET {{host}}/things/1
