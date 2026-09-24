@@ -11,6 +11,7 @@ import { thingsOfTheDayPlugin } from './plugins/thingsOfTheDay/thingsOfTheDay.js
 import { authPlugin } from './plugins/auth/auth.js';
 import { authRoutesPlugin } from './plugins/auth/authRoutes.js';
 import { passkeyRoutesPlugin } from './plugins/auth/passkey/passkeyRoutes.js';
+import { patRoutesPlugin } from './plugins/auth/pat/patRoutes.js';
 import { usersPlugin } from './plugins/users/users.js';
 import { authNotifierPlugin } from './plugins/authNotifier/authNotifier.js';
 import { votesPlugin } from './plugins/votes/votes.js';
@@ -104,6 +105,7 @@ fastify.register(sectionsPlugin, { prefix: '/sections' });
 fastify.register(thingsOfTheDayPlugin, { prefix: '/things-of-the-day' });
 fastify.register(authRoutesPlugin, { prefix: '/auth' });
 fastify.register(passkeyRoutesPlugin, { prefix: '/auth' });
+fastify.register(patRoutesPlugin, { prefix: '/auth' });
 fastify.register(usersPlugin, { prefix: '/users' });
 fastify.register(votesPlugin, { prefix: '/things' });
 fastify.register(bookmarksPlugin, { prefix: '/bookmarks' });
