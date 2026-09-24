@@ -69,3 +69,25 @@ export const clearPasswordResetRequested = (userRights: number): number =>
 // auth_group ids the rights model treats specially; see docs/auth.md (rights bitmask).
 export const GROUP_ADMINS = 1;
 export const GROUP_EDITORS = 2;
+
+export interface AccountRoles {
+	banned: boolean;
+	isAdmin: boolean;
+	isEditor: boolean;
+	rights: ResolvedRights;
+}
+
+// The one place that turns (user bits, group bits, group id) into roles and
+// resolved rights. Login sessions (issueTokens.ts) and personal access tokens
+// (pat/scope.ts) both go through here, so a token can never unlock more than
+// a session would. See docs/auth.md (rights bitmask).
+export const resolveAccountRoles = (userRights: number, groupRights: number, groupId: number): AccountRoles => {
+	const banned = isBanned(userRights) || isBanned(groupRights);
+
+	return {
+		banned,
+		isAdmin: !banned && groupId === GROUP_ADMINS,
+		isEditor: !banned && (groupId === GROUP_ADMINS || groupId === GROUP_EDITORS),
+		rights: resolveRights(userRights, groupRights),
+	};
+};

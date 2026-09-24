@@ -1,4 +1,4 @@
-import { GROUP_ADMINS, GROUP_EDITORS, isBanned, resolveRights, type ResolvedRights } from '../rights.js';
+import { resolveAccountRoles, type AccountRoles } from '../rights.js';
 
 // A token's scope is a ceiling, not a grant: the effective level on every use
 // is the lower of the token's scope and what the account holds right now.
@@ -30,28 +30,20 @@ export interface AccountRightsInput {
 	groupId: number;
 }
 
-export interface AccountLevel {
-	banned: boolean;
-	isAdmin: boolean;
-	isEditor: boolean;
-	rights: ResolvedRights;
+export interface AccountLevel extends AccountRoles {
 	level: PatScope;
 }
 
-// Same inputs and the same isAdmin/isEditor rule as issueTokens.ts, so a
-// token can never unlock more than a login session would.
+// Roles come from rights.ts (shared with login sessions); this only adds the level.
 export const resolveAccountLevel = ({ userRights, groupRights, groupId }: AccountRightsInput): AccountLevel => {
-	const banned = isBanned(userRights) || isBanned(groupRights);
-	const rights = resolveRights(userRights, groupRights);
-	const isAdmin = !banned && groupId === GROUP_ADMINS;
-	const isEditor = !banned && (groupId === GROUP_ADMINS || groupId === GROUP_EDITORS);
-	const level: PatScope = isAdmin && rights.canEditUsers
+	const roles = resolveAccountRoles(userRights, groupRights, groupId);
+	const level: PatScope = roles.isAdmin && roles.rights.canEditUsers
 		? 'admin'
-		: isEditor && rights.canEditContent
+		: roles.isEditor && roles.rights.canEditContent
 			? 'editor'
 			: 'read';
 
-	return { banned, isAdmin, isEditor, rights, level };
+	return { ...roles, level };
 };
 
 export const effectiveLevel = (scope: PatScope, account: AccountLevel): PatScope =>
