@@ -5,11 +5,16 @@ import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import { touchPersonalAccessToken } from '../auth/pat/databaseHelpers.js';
 import { authenticateMcpCaller } from './patAuth.js';
 import { callRoute, toolInputSchema, toolOutputSchema } from './bridge.js';
-import { catalogueForLevel } from './catalogue.js';
+import { CATALOGUE, catalogueForLevel } from './catalogue.js';
 import { callerToolLevel, type McpCaller } from './principal.js';
 
 const MCP_RATE_LIMIT = { max: 120, timeWindow: '1 minute' };
 const SERVER_INFO = { name: 'poetry', version: '1.0.0' };
+
+// Tool schemas are compiled once per row: fromJsonSchema registers each object
+// with the SDK's process-wide validator cache, so per-request objects would
+// accumulate there forever.
+const TOOL_SCHEMAS = new Map(CATALOGUE.map((row) => [row.name, { input: toolInputSchema(row), output: toolOutputSchema(row) }]));
 
 // Per-request context handed to the SDK factory through authInfo.extra: the
 // SDK passes authInfo through untouched and never reads headers itself.
@@ -34,13 +39,15 @@ const buildServer = (fastify: FastifyInstance, extra: McpRequestExtra): McpServe
 	const { caller, requestId, log } = extra;
 
 	for (const row of catalogueForLevel(callerToolLevel(caller))) {
+		const schemas = TOOL_SCHEMAS.get(row.name)!;
+
 		server.registerTool(
 			row.name,
 			{
 				title: row.title,
 				description: row.description,
-				inputSchema: toolInputSchema(row),
-				outputSchema: toolOutputSchema(row),
+				inputSchema: schemas.input,
+				outputSchema: schemas.output,
 				annotations: row.annotations,
 			},
 			async (args) => {
@@ -65,7 +72,7 @@ const buildServer = (fastify: FastifyInstance, extra: McpRequestExtra): McpServe
 
 					return result;
 				} catch (error) {
-					log.error({ tool: row.name }, 'MCP tool failed');
+					log.error({ err: error, tool: row.name }, 'MCP tool failed');
 					throw error;
 				}
 			},
@@ -80,9 +87,14 @@ export async function mcpPlugin(fastify: FastifyInstance) {
 
 	const handler = createMcpHandler(
 		({ authInfo }) => buildServer(fastify, authInfo!.extra as unknown as McpRequestExtra),
-		{ responseMode: 'json' },
+		{
+			responseMode: 'json',
+			onerror: (error) => fastify.log.error({ err: error }, 'MCP handler failed'),
+		},
 	);
-	const node = toNodeHandler(handler);
+	const node = toNodeHandler(handler, {
+		onerror: (error) => fastify.log.error({ err: error }, 'MCP node adapter failed'),
+	});
 
 	fastify.addHook('onClose', async () => {
 		await handler.close();
@@ -91,7 +103,7 @@ export async function mcpPlugin(fastify: FastifyInstance) {
 	fastify.all('/', {
 		config: { rateLimit: MCP_RATE_LIMIT },
 		schema: {
-			description: 'MCP Streamable HTTP endpoint (JSON responses). Anonymous callers see the public tools; a personal access token unlocks editor/admin tools up to its level.',
+			description: 'MCP Streamable HTTP endpoint (one JSON-RPC response per POST; 2025-era clients receive it as a single SSE frame). Anonymous callers see the public tools; a personal access token unlocks editor/admin tools up to its level.',
 			tags: ['MCP'],
 			hide: true,
 		},
@@ -104,6 +116,7 @@ export async function mcpPlugin(fastify: FastifyInstance) {
 
 		const extra: McpRequestExtra = { caller: auth.caller, requestId: request.id, log: request.log };
 
+		reply.raw.setHeader('x-request-id', request.id);
 		reply.hijack();
 		await node(Object.assign(request.raw, { auth: buildAuthInfo(extra) }), reply.raw, request.body);
 	});

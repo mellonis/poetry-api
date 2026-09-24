@@ -73,7 +73,36 @@ const parseMcpBody = (body: string): unknown => {
 	return JSON.parse(dataLines.length > 0 ? dataLines.map((line) => line.slice('data: '.length)).join('') : body);
 };
 
-const rpc = async (app: Awaited<ReturnType<typeof buildApp>>, body: object, token?: string) => {
+interface McpTool {
+	name: string;
+	description: string;
+	inputSchema: { properties: Record<string, { type?: string }> };
+	outputSchema: { properties: Record<string, unknown> };
+	annotations: Record<string, boolean>;
+}
+
+interface McpResultBody {
+	tools?: McpTool[];
+	serverInfo?: { name: string };
+	capabilities?: { tools?: unknown };
+	isError?: boolean;
+	structuredContent?: unknown;
+	content?: { type: string; text: string }[];
+}
+
+// Loose but non-`any` shape covering every response this test file decodes:
+// a JSON-RPC success (`result`), a JSON-RPC error (`error` as an object), or
+// the plain auth-rejection body sent before the SDK is reached (`error` as a
+// string, plus `message`).
+interface RpcJson {
+	result?: McpResultBody;
+	error?: string | { code: number; message: string };
+	message?: string;
+}
+
+type RpcResult = { status: number; json: RpcJson | undefined; headers: Record<string, string | number | string[] | undefined> };
+
+const rpc = async (app: Awaited<ReturnType<typeof buildApp>>, body: object, token?: string): Promise<RpcResult> => {
 	const res = await app.inject({
 		method: 'POST', url: '/mcp',
 		headers: {
@@ -84,10 +113,10 @@ const rpc = async (app: Awaited<ReturnType<typeof buildApp>>, body: object, toke
 		},
 		payload: JSON.stringify({ jsonrpc: '2.0', id: 1, ...body }),
 	});
-	return { status: res.statusCode, json: res.body ? parseMcpBody(res.body) : undefined };
+	return { status: res.statusCode, json: res.body ? (parseMcpBody(res.body) as RpcJson) : undefined, headers: res.headers };
 };
 
-const toolNames = (json: { result: { tools: { name: string }[] } }) => json.result.tools.map((t) => t.name).sort();
+const toolNames = (json: RpcJson | undefined) => json!.result!.tools!.map((t) => t.name).sort();
 const PUBLIC_TOOLS = ['get_section', 'get_thing', 'get_things_of_the_day', 'list_sections', 'search_things'];
 
 // PAT rows: the token's hash must match what the api looks up.
@@ -104,8 +133,8 @@ describe('POST /mcp — protocol', () => {
 		const app = await buildApp(createSqlMysql([]).pool);
 		const { status, json } = await rpc(app, { method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } });
 		expect(status).toBe(200);
-		expect(json.result.serverInfo.name).toBe('poetry');
-		expect(json.result.capabilities.tools).toBeDefined();
+		expect(json!.result!.serverInfo!.name).toBe('poetry');
+		expect(json!.result!.capabilities!.tools).toBeDefined();
 	});
 
 	it('GET /mcp is not a session endpoint', async () => {
@@ -118,8 +147,18 @@ describe('POST /mcp — protocol', () => {
 describe('POST /mcp — tools/list by level', () => {
 	it('anonymous → the 5 public tools', async () => {
 		const app = await buildApp(createSqlMysql([]).pool);
-		const { json } = await rpc(app, { method: 'tools/list' });
+		const { json, headers } = await rpc(app, { method: 'tools/list' });
 		expect(toolNames(json)).toEqual(PUBLIC_TOOLS);
+		expect(headers['x-request-id']).toBeDefined();
+	});
+
+	it('three consecutive admin tools/list calls all return 39', async () => {
+		const token = generatePersonalAccessToken();
+		const app = await buildApp(createSqlMysql([patRule(token, 3, ADMIN)]).pool);
+
+		for (let i = 0; i < 3; i++) {
+			expect(toolNames((await rpc(app, { method: 'tools/list' }, token)).json)).toHaveLength(39);
+		}
 	});
 
 	it('read token → the same 5', async () => {
@@ -147,7 +186,7 @@ describe('POST /mcp — tools/list by level', () => {
 	it('advertises input and output schemas with real types', async () => {
 		const app = await buildApp(createSqlMysql([]).pool);
 		const { json } = await rpc(app, { method: 'tools/list' });
-		const getThing = json.result.tools.find((t: { name: string }) => t.name === 'get_thing');
+		const getThing = json!.result!.tools!.find((t) => t.name === 'get_thing')!;
 		expect(getThing.inputSchema.properties.thingId.type).toBe('integer');
 		expect(getThing.outputSchema.properties.sections).toBeDefined();
 		expect(getThing.annotations.readOnlyHint).toBe(true);
@@ -160,7 +199,7 @@ describe('POST /mcp — auth failures', () => {
 		const app = await buildApp(createSqlMysql([]).pool);
 		const { status, json } = await rpc(app, { method: 'tools/list' }, generatePersonalAccessToken());
 		expect(status).toBe(401);
-		expect(json.error).toBe('unauthorized');
+		expect(json!.error).toBe('unauthorized');
 	});
 
 	it('JWT bearer → 401 with the PAT-only message', async () => {
@@ -168,7 +207,7 @@ describe('POST /mcp — auth failures', () => {
 		const jwt = await signAccessToken({ sub: 3, login: 'ed', isAdmin: false, isEditor: true, tokenVersion: 0, rights: { canVote: true, canComment: true, canEditContent: true, canEditUsers: false } }, new TextEncoder().encode(JWT_SECRET));
 		const { status, json } = await rpc(app, { method: 'tools/list' }, jwt);
 		expect(status).toBe(401);
-		expect(json.message).toMatch(/personal access tokens only/);
+		expect(json!.message).toMatch(/personal access tokens only/);
 	});
 
 	it('banned account → 401', async () => {
@@ -187,24 +226,24 @@ describe('POST /mcp — tools/call', () => {
 	it('get_thing returns structuredContent equal to the route output', async () => {
 		const app = await buildApp(createSqlMysql([{ match: 'thing.r_thing_status_id = 2', rows: [thingRow] }]).pool);
 		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'get_thing', arguments: { thingId: 42 } } });
-		expect(json.result.isError).toBeUndefined();
-		expect(json.result.structuredContent).toMatchObject({ id: 42, title: 'Утро', sections: [{ id: 'nnils', position: 7 }] });
-		expect(JSON.parse(json.result.content[0].text).id).toBe(42);
+		expect(json!.result!.isError).toBeUndefined();
+		expect(json!.result!.structuredContent).toMatchObject({ id: 42, title: 'Утро', sections: [{ id: 'nnils', position: 7 }] });
+		expect(JSON.parse(json!.result!.content![0].text).id).toBe(42);
 	});
 
 	it('get_thing on an unknown id → isError with the route message', async () => {
 		const app = await buildApp(createSqlMysql([]).pool);
 		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'get_thing', arguments: { thingId: 999 } } });
-		expect(json.result.isError).toBe(true);
-		expect(json.result.content[0].text).toMatch(/404/);
+		expect(json!.result!.isError).toBe(true);
+		expect(json!.result!.content![0].text).toMatch(/404/);
 	});
 
 	it('read token cannot call cms_update_thing (tool not registered)', async () => {
 		const token = generatePersonalAccessToken();
 		const app = await buildApp(createSqlMysql([patRule(token, 1)]).pool);
 		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'cms_update_thing', arguments: { thingId: 1, title: 'x' } } }, token);
-		expect(json.error).toBeDefined();
-		expect(json.result).toBeUndefined();
+		expect(json!.error).toBeDefined();
+		expect(json!.result).toBeUndefined();
 	});
 
 	it('editor token reaches PUT /cms/things through the bridge with editor claims and fires revalidation', async () => {
@@ -217,9 +256,11 @@ describe('POST /mcp — tools/call', () => {
 		]);
 		const app = await buildApp(pool);
 		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'cms_update_thing', arguments: { thingId: 1, title: 'Новое' } } }, token);
-		expect(json.result?.isError, JSON.stringify(json)).toBeUndefined();
+		expect(json!.result?.isError, JSON.stringify(json)).toBeUndefined();
 		expect(calls.some((c) => /UPDATE thing/.test(c.sql))).toBe(true);
-		expect(calls.some((c) => /SET last_used_at = NOW\(\)/.test(c.sql))).toBe(true);
+		// touchPersonalAccessToken is fire-and-forget from the tool handler, so its
+		// query may still be in flight when the response returns.
+		await vi.waitFor(() => expect(calls.some((c) => /SET last_used_at = NOW\(\)/.test(c.sql))).toBe(true));
 		expect(app.revalidateContent).toHaveBeenCalled();
 	});
 
@@ -227,7 +268,7 @@ describe('POST /mcp — tools/call', () => {
 		const token = generatePersonalAccessToken();
 		const app = await buildApp(createSqlMysql([patRule(token, 3, ADMIN)]).pool);
 		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'admin_delete_user', arguments: { userId: 1 } } }, token);
-		expect(json.result.isError).toBe(true);
-		expect(json.result.content[0].text).toMatch(/403/);
+		expect(json!.result!.isError).toBe(true);
+		expect(json!.result!.content![0].text).toMatch(/403/);
 	});
 });
