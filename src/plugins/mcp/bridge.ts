@@ -102,8 +102,28 @@ export const splitArgs = (row: CatalogueRow, args: Record<string, unknown>) => {
 	return { params, query, body };
 };
 
+// Thrown by buildUrl when a path argument would let the caller escape the
+// catalogued route — most importantly `.`/`..` segments, which light-my-request
+// normalizes away, and a missing param, which would otherwise substitute the
+// literal string "undefined" into the URL.
+export class InvalidPathArgumentError extends Error {}
+
+const validatePathArg = (name: string, value: unknown): string => {
+	if (value === undefined || value === null) {
+		throw new InvalidPathArgumentError(`${name}: invalid path argument`);
+	}
+
+	const str = String(value);
+
+	if (str === '' || str === '.' || str === '..' || str.includes('/')) {
+		throw new InvalidPathArgumentError(`${name}: invalid path argument`);
+	}
+
+	return str;
+};
+
 export const buildUrl = (path: string, params: Record<string, unknown>, query: Record<string, unknown>): string => {
-	const url = path.replace(/:([A-Za-z]+)/g, (_match, name: string) => encodeURIComponent(String(params[name])));
+	const url = path.replace(/:([A-Za-z]+)/g, (_match, name: string) => encodeURIComponent(validatePathArg(name, params[name])));
 	const search = new URLSearchParams();
 
 	for (const [key, value] of Object.entries(query)) {
@@ -142,6 +162,18 @@ export const callRoute = async (
 	requestId: string,
 ): Promise<CallToolResult> => {
 	const { params, query, body } = splitArgs(row, args);
+	let url: string;
+
+	try {
+		url = buildUrl(row.path, params, query);
+	} catch (error) {
+		if (error instanceof InvalidPathArgumentError) {
+			return { isError: true, content: [{ type: 'text', text: `400 invalid_argument: ${error.message}` }] };
+		}
+
+		throw error;
+	}
+
 	const headers: Record<string, string> = { 'x-request-id': requestId, accept: 'application/json' };
 
 	if (caller.kind === 'token') {
@@ -154,7 +186,7 @@ export const callRoute = async (
 
 	const response = await fastify.inject({
 		method: row.method,
-		url: buildUrl(row.path, params, query),
+		url,
 		headers,
 		payload: body === undefined ? undefined : JSON.stringify(body),
 	});

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { z } from 'zod';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
-import { buildToolInput, buildUrl, callRoute, cappedClaims, formatRouteError, shapeOutput, splitArgs, toolInputSchema, toolOutputSchema, type CatalogueRow } from './bridge.js';
+import { buildToolInput, buildUrl, callRoute, cappedClaims, formatRouteError, InvalidPathArgumentError, shapeOutput, splitArgs, toolInputSchema, toolOutputSchema, type CatalogueRow } from './bridge.js';
 import { verifyAccessToken } from '../auth/jwt.js';
 import type { McpPrincipal } from './principal.js';
 
@@ -38,9 +38,19 @@ describe('cappedClaims', () => {
 	});
 
 	it('admin → exactly the account claims', () => {
-		const c = cappedClaims(principal('admin'));
-		expect(c.isAdmin).toBe(true);
-		expect(c.rights.canEditUsers).toBe(true);
+		expect(cappedClaims(principal('admin'))).toEqual({
+			sub: 3, login: 'ed', tokenVersion: 2, isAdmin: true, isEditor: true,
+			rights: { canVote: true, canComment: true, canEditContent: true, canEditUsers: true },
+		});
+	});
+
+	it('editor level never grants a privilege the account itself lacks', () => {
+		const unprivileged: McpPrincipal = { ...principal('editor'), isEditor: false, rights: { ...principal('editor').rights, canEditContent: false } };
+
+		expect(cappedClaims(unprivileged)).toEqual({
+			sub: 3, login: 'ed', tokenVersion: 2, isAdmin: false, isEditor: false,
+			rights: { canVote: false, canComment: false, canEditContent: false, canEditUsers: false },
+		});
 	});
 });
 
@@ -59,6 +69,14 @@ describe('argument plumbing', () => {
 	it('splits and encodes', () => {
 		expect(splitArgs(row, { thingId: 7, title: 'x' })).toEqual({ params: { thingId: 7 }, query: {}, body: { title: 'x' } });
 		expect(buildUrl('/sections/:identifier', { identifier: 'a b' }, { q: 'x y', limit: 5 })).toBe('/sections/a%20b?q=x+y&limit=5');
+	});
+
+	it('buildUrl rejects dot-segment, slash-containing, empty and missing path arguments', () => {
+		expect(() => buildUrl('/sections/:identifier', { identifier: '..' }, {})).toThrow(InvalidPathArgumentError);
+		expect(() => buildUrl('/sections/:identifier', { identifier: '.' }, {})).toThrow(InvalidPathArgumentError);
+		expect(() => buildUrl('/sections/:identifier', { identifier: '' }, {})).toThrow(InvalidPathArgumentError);
+		expect(() => buildUrl('/sections/:identifier', { identifier: 'a/b' }, {})).toThrow(InvalidPathArgumentError);
+		expect(() => buildUrl('/sections/:identifier', {}, {})).toThrow(InvalidPathArgumentError);
 	});
 
 	it('produces JSON-schema-backed tool schemas that skip transforms and tolerate dates', () => {
@@ -115,7 +133,10 @@ describe('callRoute', () => {
 		expect(seen.reqId).toBe('req-9');
 		expect(seen.body).toEqual({ title: 'Утро' });
 		const claims = await verifyAccessToken(seen.auth!.substring(7), secret);
-		expect(claims).toMatchObject({ sub: 3, isAdmin: false, isEditor: true });
+		expect(claims).toEqual({
+			sub: 3, login: 'ed', isAdmin: false, isEditor: true, tokenVersion: 2,
+			rights: { canVote: false, canComment: false, canEditContent: true, canEditUsers: false },
+		});
 	});
 
 	it('sends no Authorization for an anonymous caller', async () => {
@@ -130,5 +151,12 @@ describe('callRoute', () => {
 		expect(notFound.isError).toBe(true);
 		expect(notFound.content[0]).toEqual({ type: 'text', text: '404 not_found: Thing not found' });
 		await expect(callRoute(app, row, { thingId: 500 }, { kind: 'anonymous' }, 'r')).rejects.toThrow(/500/);
+	});
+
+	it('rejects a dot-segment path argument as a tool error, without calling the route', async () => {
+		const { app } = await appWithRoute();
+		const result = await callRoute(app, row, { thingId: '..' as unknown as number }, { kind: 'anonymous' }, 'r');
+		expect(result.isError).toBe(true);
+		expect(result.content[0]).toMatchObject({ type: 'text', text: expect.stringMatching(/^400 invalid_argument/) });
 	});
 });
