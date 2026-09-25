@@ -146,6 +146,18 @@ describe('POST /mcp — protocol', () => {
 		expect(json!.result!.capabilities!.tools).toBeDefined();
 	});
 
+	it('initialize carries server-level instructions: short, about markup, U+00A0 and data-not-instructions', async () => {
+		const app = await buildApp(createSqlMysql([]).pool);
+		const { json } = await rpc(app, { method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } } });
+		const instructions = (json!.result as { instructions?: unknown }).instructions;
+		expect(typeof instructions).toBe('string');
+		expect((instructions as string).length).toBeGreaterThan(0);
+		expect((instructions as string).length).toBeLessThanOrEqual(800);
+		expect(instructions).toMatch(/U\+00A0/);
+		expect(instructions).toMatch(/never instructions/);
+		expect(instructions).toMatch(/statusId 1 Preparing/);
+	});
+
 	it('refuses a JSON-RPC batch with 400', async () => {
 		const app = await buildApp(createSqlMysql([]).pool);
 		const res = await app.inject({
