@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { errorResponse } from '../../../lib/schemas.js';
 import { actorFingerprint } from '../../../lib/actorFingerprint.js';
 import { authErrorResponse } from '../schemas.js';
-import { findUserByLogin } from '../databaseHelpers.js';
+import { findUserById } from '../databaseHelpers.js';
 import { hashToken } from '../jwt.js';
 import { generatePersonalAccessToken } from './token.js';
 import { levelAtLeast, resolveAccountLevel, scopeToDb } from './scope.js';
@@ -65,10 +65,17 @@ export async function patRoutesPlugin(fastify: FastifyInstance) {
 		preHandler: [fastify.verifyJwt],
 		handler: async (request: FastifyRequest<{ Body: CreatePersonalAccessTokenRequest }>, reply) => {
 			try {
-				const account = await findUserByLogin(fastify.mysql, request.user!.login);
+				const account = await findUserById(fastify.mysql, request.user!.sub);
 
 				if (!account) {
 					return reply.code(401).send({ error: 'unauthorized', message: 'Account not found' });
+				}
+
+				// A leftover access JWT from before a password change/reset carries the old
+				// tokenVersion; it must not mint a token that would outlive that purge.
+				if (account.tokenVersion !== request.user!.tokenVersion) {
+					request.log.warn({ actorFingerprint: actorFingerprint(account.userId) }, 'Personal access token creation refused: stale session');
+					return reply.code(401).send({ error: 'unauthorized', message: 'Session is no longer valid' });
 				}
 
 				const level = resolveAccountLevel(account);

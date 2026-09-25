@@ -2,11 +2,13 @@ import { createHash, randomBytes } from 'node:crypto';
 import type { MySQLPromisePool, MySQLResultSetHeader, MySQLRowDataPacket } from '@fastify/mysql';
 import { withConnection } from '../../lib/databaseHelpers.js';
 import {
+	bumpUserTokenVersionQuery,
 	deleteAllUserRefreshTokensQuery,
 	deleteRefreshTokenQuery,
 	findRefreshTokenWithUserQuery,
 	findUserByKeyQuery,
 	findUserByEmailQuery,
+	findUserByIdQuery,
 	findUserByLoginQuery,
 	insertRefreshTokenQuery,
 	insertUserQuery,
@@ -47,6 +49,12 @@ export const findUserByLogin = async (mysql: MySQLPromisePool, login: string): P
 		return rows.length > 0 ? mapUserRow(rows[0]) : null;
 	});
 
+export const findUserById = async (mysql: MySQLPromisePool, userId: number): Promise<UserRow | null> =>
+	withConnection(mysql, async (connection) => {
+		const [rows] = await connection.query<MySQLRowDataPacket[]>(findUserByIdQuery, [userId]);
+		return rows.length > 0 ? mapUserRow(rows[0]) : null;
+	});
+
 export const findUserByEmail = async (mysql: MySQLPromisePool, email: string): Promise<UserRow | null> =>
 	withConnection(mysql, async (connection) => {
 		const [rows] = await connection.query<MySQLRowDataPacket[]>(findUserByEmailQuery, [email]);
@@ -84,6 +92,13 @@ export const findAndDeleteRefreshToken = async (
 export const deleteAllUserRefreshTokens = async (mysql: MySQLPromisePool, userId: number): Promise<void> => {
 	await withConnection(mysql, async (connection) => {
 		await connection.query(deleteAllUserRefreshTokensQuery, [userId]);
+	});
+};
+
+// Invalidates every access JWT issued before now (they carry the old tokenVersion).
+export const bumpTokenVersion = async (mysql: MySQLPromisePool, userId: number): Promise<void> => {
+	await withConnection(mysql, async (connection) => {
+		await connection.query(bumpUserTokenVersionQuery, [userId]);
 	});
 };
 

@@ -4,7 +4,7 @@ import { errorResponse } from '../../lib/schemas.js';
 import { sendEmail } from '../../lib/email.js';
 import { accountDeletedEmail } from '../../lib/emailTemplates.js';
 import { checkPassword, hashPassword } from '../auth/password.js';
-import { deleteAllUserRefreshTokens } from '../auth/databaseHelpers.js';
+import { bumpTokenVersion, deleteAllUserRefreshTokens } from '../auth/databaseHelpers.js';
 import { deleteAllUserPersonalAccessTokens } from '../auth/pat/databaseHelpers.js';
 import { getUserCredentials, updatePassword, deleteUser, getNotificationSettings, updateNotificationSettings, getDisplayName, setDisplayName, isReservedDisplayName } from './databaseHelpers.js';
 import { authErrorResponse } from '../auth/schemas.js';
@@ -78,6 +78,8 @@ export async function usersPlugin(fastify: FastifyInstance) {
 				await deleteAllUserRefreshTokens(fastify.mysql, userId);
 				// Explicit purge: this is a credential event, not account deletion (the FK cascade covers that).
 				await deleteAllUserPersonalAccessTokens(fastify.mysql, userId);
+				// Retire leftover access JWTs too, so none can mint a new token after the purge.
+				await bumpTokenVersion(fastify.mysql, userId);
 				await fastify.authNotifier.sendPasswordChanged(credentials.email, user.login, fastify.resolveOrigin(request));
 
 				request.log.info({ actorFingerprint: actorFingerprint(userId) }, 'Password changed');

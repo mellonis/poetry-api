@@ -81,6 +81,34 @@ describe('POST /auth/tokens', () => {
 		expect(insert.params[2]).toMatch(/^[0-9a-f]{64}$/);           // hash, not the token
 		expect(insert.params[2]).toBe(hashToken(body.token));
 		expect(insert.params[3]).toBe(2);
+		expect(calls[0].sql).toMatch(/WHERE user_id = \?/);
+		expect(calls[0].params).toEqual([3]);
+	});
+
+	it('refuses a stale session (tokenVersion mismatch) with 401 and no INSERT', async () => {
+		const { pool, calls } = createRecordingMysql([{ ...editorUserRow, token_version: 1 }]);
+		const app = await buildApp(pool);
+		const res = await app.inject({
+			method: 'POST', url: '/auth/tokens',
+			headers: { authorization: `Bearer ${await editorJwt()}` },
+			payload: { name: 'x', scope: 'read' },
+		});
+		expect(res.statusCode).toBe(401);
+		expect(res.json()).toEqual({ error: 'unauthorized', message: 'Session is no longer valid' });
+		expect(calls.some((c) => /INSERT/.test(c.sql))).toBe(false);
+	});
+
+	it('refuses when the account no longer exists with 401', async () => {
+		const { pool, calls } = createRecordingMysql([]);
+		const app = await buildApp(pool);
+		const res = await app.inject({
+			method: 'POST', url: '/auth/tokens',
+			headers: { authorization: `Bearer ${await editorJwt()}` },
+			payload: { name: 'x', scope: 'read' },
+		});
+		expect(res.statusCode).toBe(401);
+		expect(res.json()).toEqual({ error: 'unauthorized', message: 'Account not found' });
+		expect(calls.some((c) => /INSERT/.test(c.sql))).toBe(false);
 	});
 
 	it('refuses a scope above the account level with 403', async () => {

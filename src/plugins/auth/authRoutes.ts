@@ -15,6 +15,7 @@ import {
 	setPasswordResetRequested
 } from './rights.js';
 import {
+	bumpTokenVersion,
 	createUser,
 	deleteAllUserRefreshTokens,
 	findAndDeleteRefreshToken,
@@ -388,6 +389,8 @@ export async function authRoutesPlugin(fastify: FastifyInstance) {
 				await resetPassword(fastify.mysql, user.userId, passwordHash, newRights);
 				await deleteAllUserRefreshTokens(fastify.mysql, user.userId);
 				await deleteAllUserPersonalAccessTokens(fastify.mysql, user.userId);
+				// Retire leftover access JWTs too, so none can mint a new token after the purge.
+				await bumpTokenVersion(fastify.mysql, user.userId);
 
 				request.log.info({ actorFingerprint: actorFingerprint(user.userId) }, 'Password reset completed');
 				return { message: 'Password reset successfully' };

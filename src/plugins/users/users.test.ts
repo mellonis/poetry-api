@@ -106,6 +106,7 @@ describe('PATCH /users/:userId/password', () => {
 			[], // updatePassword
 			[], // deleteAllUserRefreshTokens
 			[], // deleteAllUserPersonalAccessTokens
+			[], // bumpTokenVersion
 		);
 		const app = await buildApp(pool);
 		const token = await getToken();
@@ -121,6 +122,7 @@ describe('PATCH /users/:userId/password', () => {
 		const sqls = calls.map((c) => c.sql);
 		expect(sqls.some((s) => /DELETE FROM auth_refresh_token WHERE r_user_id/.test(s))).toBe(true);
 		expect(sqls.some((s) => /DELETE FROM auth_personal_access_token WHERE r_user_id/.test(s))).toBe(true);
+		expect(sqls.some((s) => /UPDATE auth_user SET token_version = token_version \+ 1 WHERE id/.test(s))).toBe(true);
 	});
 });
 
