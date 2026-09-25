@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { effectiveLevel, levelAtLeast, resolveAccountLevel, scopeFromDb, scopeToDb } from './scope.js';
+import { canHoldScope, effectiveLevel, levelAtLeast, resolveAccountLevel, scopeFromDb, scopeToDb } from './scope.js';
 
 const ADMIN_GROUP = { groupId: 1, groupRights: 63488 };
 const EDITOR_GROUP = { groupId: 2, groupRights: 14336 };
@@ -66,5 +66,32 @@ describe('effectiveLevel', () => {
 		expect(levelAtLeast('admin', 'editor')).toBe(true);
 		expect(levelAtLeast('read', 'editor')).toBe(false);
 		expect(levelAtLeast('editor', 'editor')).toBe(true);
+	});
+});
+
+describe('canHoldScope', () => {
+	// Admin group, per-user override clears bit 12 (canEditContent) but keeps canEditUsers.
+	const adminWithoutContent = resolveAccountLevel({ userRights: 25 | (1 << 12), ...ADMIN_GROUP });
+
+	it('an admin without canEditContent can hold admin but not editor', () => {
+		expect(adminWithoutContent.rights.canEditContent).toBe(false);
+		expect(adminWithoutContent.rights.canEditUsers).toBe(true);
+		expect(canHoldScope('admin', adminWithoutContent)).toBe(true);
+		expect(canHoldScope('editor', adminWithoutContent)).toBe(false);
+		expect(canHoldScope('read', adminWithoutContent)).toBe(true);
+		expect(adminWithoutContent.level).toBe('admin');
+	});
+
+	it('effectiveLevel does not grant editor to that account', () => {
+		expect(effectiveLevel('editor', adminWithoutContent)).toBe('read');
+		expect(effectiveLevel('admin', adminWithoutContent)).toBe('admin');
+		expect(effectiveLevel('read', adminWithoutContent)).toBe('read');
+	});
+
+	it('a banned account can hold nothing', () => {
+		const banned = resolveAccountLevel({ userRights: 25 | (1 << 2), ...ADMIN_GROUP });
+		expect(canHoldScope('read', banned)).toBe(false);
+		expect(canHoldScope('editor', banned)).toBe(false);
+		expect(canHoldScope('admin', banned)).toBe(false);
 	});
 });

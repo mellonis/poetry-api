@@ -34,17 +34,40 @@ export interface AccountLevel extends AccountRoles {
 	level: PatScope;
 }
 
-// Roles come from rights.ts (shared with login sessions); this only adds the level.
+// Each scope has its own requirement rather than a rank: an admin-group account
+// whose per-user override clears canEditContent can hold `admin` but not `editor`.
+export const canHoldScope = (scope: PatScope, roles: AccountRoles): boolean => {
+	switch (scope) {
+		case 'read':
+			return !roles.banned;
+		case 'editor':
+			return roles.isEditor && roles.rights.canEditContent;
+		case 'admin':
+			return roles.isAdmin && roles.rights.canEditUsers;
+	}
+};
+
+// Roles come from rights.ts (shared with login sessions); this only adds the level,
+// which is the highest scope the account can hold.
 export const resolveAccountLevel = ({ userRights, groupRights, groupId }: AccountRightsInput): AccountLevel => {
 	const roles = resolveAccountRoles(userRights, groupRights, groupId);
-	const level: PatScope = roles.isAdmin && roles.rights.canEditUsers
+	const level: PatScope = canHoldScope('admin', roles)
 		? 'admin'
-		: roles.isEditor && roles.rights.canEditContent
+		: canHoldScope('editor', roles)
 			? 'editor'
 			: 'read';
 
 	return { ...roles, level };
 };
 
-export const effectiveLevel = (scope: PatScope, account: AccountLevel): PatScope =>
-	levelAtLeast(account.level, scope) ? scope : account.level;
+export const effectiveLevel = (scope: PatScope, account: AccountLevel): PatScope => {
+	if (scope === 'admin' && canHoldScope('admin', account)) {
+		return 'admin';
+	}
+
+	if ((scope === 'editor' || scope === 'admin') && canHoldScope('editor', account)) {
+		return 'editor';
+	}
+
+	return 'read';
+};

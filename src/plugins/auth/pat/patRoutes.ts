@@ -6,7 +6,7 @@ import { authErrorResponse } from '../schemas.js';
 import { findUserById } from '../databaseHelpers.js';
 import { hashToken } from '../jwt.js';
 import { generatePersonalAccessToken } from './token.js';
-import { levelAtLeast, resolveAccountLevel, scopeToDb } from './scope.js';
+import { canHoldScope, resolveAccountLevel, scopeToDb } from './scope.js';
 import {
 	createPersonalAccessToken,
 	deletePersonalAccessToken,
@@ -85,7 +85,7 @@ export async function patRoutesPlugin(fastify: FastifyInstance) {
 					return reply.code(403).send({ error: 'forbidden', message: 'Account is banned' });
 				}
 
-				if (!levelAtLeast(level.level, request.body.scope)) {
+				if (!canHoldScope(request.body.scope, level)) {
 					request.log.warn({ actorFingerprint: actorFingerprint(account.userId), scope: request.body.scope }, 'Personal access token creation refused: scope above account level');
 					return reply.code(403).send({ error: 'forbidden', message: 'Requested scope exceeds your account rights' });
 				}

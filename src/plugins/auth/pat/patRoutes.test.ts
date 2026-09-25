@@ -124,6 +124,27 @@ describe('POST /auth/tokens', () => {
 		expect(calls.some((c) => /INSERT/.test(c.sql))).toBe(false);
 	});
 
+	it('refuses editor scope to an admin whose override clears canEditContent with 403', async () => {
+		// Admin group, per-user bit 12 toggles canEditContent off; canEditUsers stays.
+		const adminWithoutContentRow = {
+			...editorUserRow, user_id: 7, user_login: 'ops', user_rights: 25 | (1 << 12), group_id: 1, group_rights: 63488,
+		};
+		const jwt = await signAccessToken(
+			{ sub: 7, login: 'ops', isAdmin: true, isEditor: true, tokenVersion: 0, rights: { ...noRights, canVote: true, canComment: true, canEditUsers: true } },
+			secret,
+		);
+		const { pool, calls } = createRecordingMysql([adminWithoutContentRow]);
+		const app = await buildApp(pool);
+		const res = await app.inject({
+			method: 'POST', url: '/auth/tokens',
+			headers: { authorization: `Bearer ${jwt}` },
+			payload: { name: 'x', scope: 'editor' },
+		});
+		expect(res.statusCode).toBe(403);
+		expect(res.json().error).toBe('forbidden');
+		expect(calls.some((c) => /INSERT/.test(c.sql))).toBe(false);
+	});
+
 	it('rejects an unknown scope with 400', async () => {
 		const app = await buildApp(createRecordingMysql([editorUserRow]).pool);
 		const res = await app.inject({
