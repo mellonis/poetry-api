@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { CATALOGUE, catalogueForLevel } from './catalogue.js';
-import { buildToolInput, toolInputSchema, toolOutputSchema } from './bridge.js';
+import { z } from 'zod';
+import { toolInputSchema, toolOutputSchema } from './bridge.js';
 import { authPlugin } from '../auth/auth.js';
 import { sectionsPlugin } from '../sections/sections.js';
 import { thingsPlugin } from '../things/things.js';
@@ -73,9 +74,13 @@ describe('catalogue', () => {
 		for (const row of CATALOGUE) {
 			const paramKeys = Object.keys(row.params?.shape ?? {});
 			const queryKeys = Object.keys(row.query?.shape ?? {});
-			const merged = Object.keys(buildToolInput(row).shape);
-			const bodyKeys = merged.filter((k) => !paramKeys.includes(k) && !queryKeys.includes(k));
-			expect(new Set([...paramKeys, ...queryKeys, ...bodyKeys]).size, row.name).toBe(paramKeys.length + queryKeys.length + bodyKeys.length);
+			const bodyKeys = row.body === undefined
+				? []
+				: row.body instanceof z.ZodObject
+					? Object.keys(row.body.shape)
+					: [row.bodyKey ?? 'body'];
+			expect(paramKeys.filter((k) => queryKeys.includes(k)), `${row.name}: params ∩ query`).toEqual([]);
+			expect(bodyKeys.filter((k) => paramKeys.includes(k) || queryKeys.includes(k)), `${row.name}: body ∩ params/query`).toEqual([]);
 		}
 	});
 });

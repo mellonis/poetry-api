@@ -22,9 +22,21 @@ describe('authenticateMcpCaller', () => {
 	});
 
 	it('rejects a JWT bearer with the PAT-only message', async () => {
-		const r = await authenticateMcpCaller(mysqlWith([]), 'Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig', log());
+		const l = log();
+		const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxIn0.sig';
+		const r = await authenticateMcpCaller(mysqlWith([]), `Bearer ${jwt}`, l);
 		expect(r.ok).toBe(false);
 		if (!r.ok) expect(r.body.message).toMatch(/personal access tokens only/);
+		expect(l.warn).toHaveBeenCalledWith('MCP auth failed: non-PAT bearer');
+		expect(JSON.stringify((l.warn as ReturnType<typeof vi.fn>).mock.calls)).not.toContain(jwt);
+	});
+
+	it('rejects a malformed Authorization header and warns without its value', async () => {
+		const l = log();
+		const r = await authenticateMcpCaller(mysqlWith([]), 'Basic c2VjcmV0', l);
+		expect(r.ok).toBe(false);
+		expect(l.warn).toHaveBeenCalledWith('MCP auth failed: malformed Authorization header');
+		expect(JSON.stringify((l.warn as ReturnType<typeof vi.fn>).mock.calls)).not.toContain('c2VjcmV0');
 	});
 
 	it('rejects an unknown token and warns without the token value', async () => {

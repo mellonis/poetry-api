@@ -11,6 +11,7 @@ import { cmsPlugin } from '../cms/cms.js';
 import { mcpPlugin } from './mcp.js';
 import { generatePersonalAccessToken } from '../auth/pat/token.js';
 import { signAccessToken } from '../auth/jwt.js';
+import { decodeJwt } from 'jose';
 
 const JWT_SECRET = 'test-jwt-secret-that-is-at-least-32-characters-long';
 
@@ -44,8 +45,16 @@ function createSqlMysql(rules: Rule[]) {
 	return { pool, calls };
 }
 
+// Records the Authorization header of the last /cms/* request, so tests can
+// inspect the capped JWT the bridge minted for the injected route call.
+const seen: { cmsAuthorization?: string } = {};
+
 async function buildApp(mysql: MySQLPromisePool) {
+	seen.cmsAuthorization = undefined;
 	const app = Fastify({ logger: false });
+	app.addHook('onRequest', async (request) => {
+		if (request.url.startsWith('/cms/')) seen.cmsAuthorization = request.headers.authorization;
+	});
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);
 	app.decorate('mysql', mysql);
@@ -135,6 +144,17 @@ describe('POST /mcp — protocol', () => {
 		expect(status).toBe(200);
 		expect(json!.result!.serverInfo!.name).toBe('poetry');
 		expect(json!.result!.capabilities!.tools).toBeDefined();
+	});
+
+	it('refuses a JSON-RPC batch with 400', async () => {
+		const app = await buildApp(createSqlMysql([]).pool);
+		const res = await app.inject({
+			method: 'POST', url: '/mcp',
+			headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'mcp-protocol-version': '2025-06-18' },
+			payload: JSON.stringify([{ jsonrpc: '2.0', id: 1, method: 'tools/list' }, { jsonrpc: '2.0', id: 2, method: 'tools/list' }]),
+		});
+		expect(res.statusCode).toBe(400);
+		expect(res.json()).toEqual({ error: 'bad_request', message: 'JSON-RPC batches are not accepted' });
 	});
 
 	it('GET /mcp is not a session endpoint', async () => {
@@ -262,13 +282,20 @@ describe('POST /mcp — tools/call', () => {
 		// query may still be in flight when the response returns.
 		await vi.waitFor(() => expect(calls.some((c) => /SET last_used_at = NOW\(\)/.test(c.sql))).toBe(true));
 		expect(app.revalidateContent).toHaveBeenCalled();
+		// The bridge minted a JWT capped to editor claims for the injected route call.
+		expect(seen.cmsAuthorization).toMatch(/^Bearer /);
+		const claims = decodeJwt(seen.cmsAuthorization!.slice('Bearer '.length));
+		expect(claims.isAdmin).toBe(false);
+		expect(claims.isEditor).toBe(true);
 	});
 
 	it('admin_delete_user on yourself surfaces the route 403 as isError', async () => {
+		// A non-root admin, so the 403 comes from the self-protection rule, not the root-admin one.
 		const token = generatePersonalAccessToken();
-		const app = await buildApp(createSqlMysql([patRule(token, 3, ADMIN)]).pool);
-		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'admin_delete_user', arguments: { userId: 1 } } }, token);
+		const app = await buildApp(createSqlMysql([patRule(token, 3, { ...ADMIN, user_id: 7, user_login: 'ops' })]).pool);
+		const { json } = await rpc(app, { method: 'tools/call', params: { name: 'admin_delete_user', arguments: { userId: 7 } } }, token);
 		expect(json!.result!.isError).toBe(true);
 		expect(json!.result!.content![0].text).toMatch(/403/);
+		expect(json!.result!.content![0].text).toMatch(/Cannot delete self/);
 	});
 });

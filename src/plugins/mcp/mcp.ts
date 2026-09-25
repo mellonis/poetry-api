@@ -114,6 +114,12 @@ export async function mcpPlugin(fastify: FastifyInstance) {
 			return reply.code(auth.status).send(auth.body);
 		}
 
+		// A JSON-RPC batch would run many tool calls under one rate-limit hit.
+		if (Array.isArray(request.body)) {
+			request.log.warn('MCP request refused: JSON-RPC batch');
+			return reply.code(400).send({ error: 'bad_request', message: 'JSON-RPC batches are not accepted' });
+		}
+
 		const extra: McpRequestExtra = { caller: auth.caller, requestId: request.id, log: request.log };
 
 		reply.raw.setHeader('x-request-id', request.id);

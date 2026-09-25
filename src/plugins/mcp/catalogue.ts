@@ -77,7 +77,7 @@ const rows: CatalogueRow[] = [
 			return rest;
 		}) },
 	{ name: 'get_thing', level: 'public', method: 'GET', path: '/things/:thingId', title: 'Get thing', annotations: READ,
-		description: 'One published thing with its text, notes, dates, votes and every section placement.', params: thingIdArg, output: publicThingResponse },
+		description: 'One Published thing (statusId 2) by id with its text, notes, dates, votes and every section placement, redirect placements included. Things shown by get_section or get_things_of_the_day that are not Published answer 404; editors can read any thing with cms_get_thing.', params: thingIdArg, output: publicThingResponse },
 	{ name: 'search_things', level: 'public', method: 'GET', path: '/search', title: 'Search things', annotations: READ,
 		description: 'Full-text search over published things (title, text, notes). Hits carry <mark> highlights and cropped text.', query: searchArgs, output: searchResponse },
 	{ name: 'get_things_of_the_day', level: 'public', method: 'GET', path: '/things-of-the-day', title: 'Things of the day', annotations: READ,

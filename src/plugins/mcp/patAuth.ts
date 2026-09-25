@@ -25,12 +25,14 @@ export const authenticateMcpCaller = async (
 	}
 
 	if (!authorization.startsWith('Bearer ')) {
+		log.warn('MCP auth failed: malformed Authorization header');
 		return reject('Missing or invalid Authorization header');
 	}
 
 	const token = authorization.substring(7);
 
 	if (!isPersonalAccessToken(token)) {
+		log.warn('MCP auth failed: non-PAT bearer');
 		return reject('The MCP endpoint accepts personal access tokens only');
 	}
 
