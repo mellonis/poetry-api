@@ -95,7 +95,9 @@ export const deleteAllUserRefreshTokens = async (mysql: MySQLPromisePool, userId
 	});
 };
 
-// Invalidates every access JWT issued before now (they carry the old tokenVersion).
+// Marks every access JWT issued before now as stale (they carry the old tokenVersion).
+// Checked where a session can mint a longer-lived credential (POST /auth/tokens);
+// verifyJwt itself stays stateless.
 export const bumpTokenVersion = async (mysql: MySQLPromisePool, userId: number): Promise<void> => {
 	await withConnection(mysql, async (connection) => {
 		await connection.query(bumpUserTokenVersionQuery, [userId]);
