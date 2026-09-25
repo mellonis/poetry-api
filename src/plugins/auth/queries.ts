@@ -5,6 +5,17 @@ export const findUserByLoginQuery = `
 	WHERE user_login = ?
 `;
 
+export const findUserByIdQuery = `
+	SELECT user_id, user_login, user_password, user_email, user_rights,
+		   user_key, group_id, group_rights, token_version
+	FROM v_users_info
+	WHERE user_id = ?
+`;
+
+export const bumpUserTokenVersionQuery = `
+	UPDATE auth_user SET token_version = token_version + 1 WHERE id = ?
+`;
+
 export const insertRefreshTokenQuery = `
 	INSERT INTO auth_refresh_token (r_user_id, token_hash, expires_at)
 	VALUES (?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))

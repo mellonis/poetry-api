@@ -46,6 +46,7 @@ export async function authorRoutes(fastify: FastifyInstance) {
 			try {
 				await updateAuthor(fastify.mysql, request.body);
 				request.log.info('Author page updated');
+				fastify.revalidateContent(request.log, request.id);
 
 				const author = await getCmsAuthor(fastify.mysql);
 

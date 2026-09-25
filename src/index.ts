@@ -6,14 +6,17 @@ import rateLimit from '@fastify/rate-limit';
 import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod';
 import { sectionsPlugin } from './plugins/sections/sections.js';
 import { databasePlugin } from './plugins/database/database.js';
+import { revalidatePlugin } from './plugins/revalidate/revalidate.js';
 import { swaggerPlugin } from './plugins/swagger/swagger.js';
 import { thingsOfTheDayPlugin } from './plugins/thingsOfTheDay/thingsOfTheDay.js';
 import { authPlugin } from './plugins/auth/auth.js';
 import { authRoutesPlugin } from './plugins/auth/authRoutes.js';
 import { passkeyRoutesPlugin } from './plugins/auth/passkey/passkeyRoutes.js';
+import { patRoutesPlugin } from './plugins/auth/pat/patRoutes.js';
 import { usersPlugin } from './plugins/users/users.js';
 import { authNotifierPlugin } from './plugins/authNotifier/authNotifier.js';
 import { votesPlugin } from './plugins/votes/votes.js';
+import { thingsPlugin } from './plugins/things/things.js';
 import { bookmarksPlugin } from './plugins/bookmarks/bookmarks.js';
 import { authorPlugin } from './plugins/author/author.js';
 import { cmsPlugin } from './plugins/cms/cms.js';
@@ -23,6 +26,7 @@ import { searchRoutes } from './plugins/search/searchRoutes.js';
 import { healthPlugin } from './plugins/health/health.js';
 import { setupPlugin } from './plugins/setup/setup.js';
 import { isRateLimitExempt } from './plugins/auth/rateLimitAllowList.js';
+import { mcpPlugin } from './plugins/mcp/mcp.js';
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean);
 
@@ -94,6 +98,7 @@ fastify.register(rateLimit, {
 	allowList: (request) => isRateLimitExempt(request, jwtSecret),
 });
 fastify.register(databasePlugin);
+fastify.register(revalidatePlugin);
 fastify.register(healthPlugin);
 fastify.register(setupPlugin);
 fastify.register(searchPlugin);
@@ -104,13 +109,16 @@ fastify.register(sectionsPlugin, { prefix: '/sections' });
 fastify.register(thingsOfTheDayPlugin, { prefix: '/things-of-the-day' });
 fastify.register(authRoutesPlugin, { prefix: '/auth' });
 fastify.register(passkeyRoutesPlugin, { prefix: '/auth' });
+fastify.register(patRoutesPlugin, { prefix: '/auth' });
 fastify.register(usersPlugin, { prefix: '/users' });
 fastify.register(votesPlugin, { prefix: '/things' });
+fastify.register(thingsPlugin, { prefix: '/things' });
 fastify.register(bookmarksPlugin, { prefix: '/bookmarks' });
 fastify.register(authorPlugin, { prefix: '/author' });
 fastify.register(cmsPlugin, { prefix: '/cms' });
 fastify.register(commentsPlugin, { prefix: '/comments' });
 fastify.register(searchRoutes, { prefix: '/search' });
+fastify.register(mcpPlugin, { prefix: '/mcp' });
 
 async function main() {
 	await fastify.listen({

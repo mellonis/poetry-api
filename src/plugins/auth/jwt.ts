@@ -46,5 +46,9 @@ export const verifyAccessToken = async (token: string, secret: Uint8Array): Prom
 export const generateRefreshToken = (): string =>
 	randomBytes(REFRESH_TOKEN_BYTES).toString('hex');
 
-export const hashRefreshToken = (token: string): string =>
+// SHA-256 hex of an opaque secret (refresh token, personal access token) — the DB
+// stores only this; see docs/auth.md (accounts, tokens and keys).
+export const hashToken = (token: string): string =>
 	createHash('sha256').update(token).digest('hex');
+
+export const hashRefreshToken = hashToken;

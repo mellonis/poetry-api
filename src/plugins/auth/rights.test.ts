@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	resolveRights,
+	resolveAccountRoles,
 	isEmailActivated,
 	isBanned,
 	isPasswordResetRequested,
@@ -115,5 +116,42 @@ describe('status bit helpers', () => {
 	it('clearPasswordResetRequested clears bit 1', () => {
 		expect(clearPasswordResetRequested(27)).toBe(25);
 		expect(clearPasswordResetRequested(25)).toBe(25); // already clear
+	});
+});
+
+describe('resolveAccountRoles', () => {
+	it('admin group with canEditUsers rights', () => {
+		const roles = resolveAccountRoles(25, 63488, 1);
+		expect(roles.banned).toBe(false);
+		expect(roles.isAdmin).toBe(true);
+		expect(roles.isEditor).toBe(true);
+		expect(roles.rights.canEditUsers).toBe(true);
+	});
+
+	it('editor group with canEditContent rights', () => {
+		const roles = resolveAccountRoles(25, 14336, 2);
+		expect(roles.banned).toBe(false);
+		expect(roles.isAdmin).toBe(false);
+		expect(roles.isEditor).toBe(true);
+		expect(roles.rights.canEditContent).toBe(true);
+	});
+
+	it('plain user group with canVote rights', () => {
+		const roles = resolveAccountRoles(25, 0, 3);
+		expect(roles.banned).toBe(false);
+		expect(roles.isAdmin).toBe(false);
+		expect(roles.isEditor).toBe(false);
+		expect(roles.rights.canVote).toBe(true);
+	});
+
+	it('group-level ban zeroes roles and rights', () => {
+		const roles = resolveAccountRoles(25, 4, 3);
+		expect(roles.banned).toBe(true);
+		expect(roles.isAdmin).toBe(false);
+		expect(roles.isEditor).toBe(false);
+		expect(roles.rights.canVote).toBe(false);
+		expect(roles.rights.canComment).toBe(false);
+		expect(roles.rights.canEditContent).toBe(false);
+		expect(roles.rights.canEditUsers).toBe(false);
 	});
 });

@@ -5,34 +5,15 @@ import { withConnection } from '../../lib/databaseHelpers.js';
 import { reservedCheckKey, normalizeDisplayName } from '../../lib/displayName.js';
 import { actorFingerprint } from '../../lib/actorFingerprint.js';
 import { requireCanEditUsers } from './hooks.js';
+import { createReservedNameRequest, reservedNameIdParam, reservedNameListResponse, reservedNameRow } from './reservedDisplayNameSchemas.js';
 import type { MySQLRowDataPacket, MySQLResultSetHeader } from '@fastify/mysql';
-
-const reservedNameRow = z.object({
-	id: z.number().int().positive(),
-	value: z.string(),
-	reason: z.string().nullable(),
-	createdAt: z.string(),
-	createdByUserId: z.number().int().positive().nullable(),
-});
-
-const listResponse = z.object({
-	items: z.array(reservedNameRow),
-	total: z.number().int().min(0),
-});
-
-const createRequest = z.object({
-	value: z.string().min(1).max(64),
-	reason: z.string().max(255).optional(),
-});
-
-const idParam = z.object({ id: z.coerce.number().int().positive() });
 
 export async function reservedDisplayNameRoutes(fastify: FastifyInstance) {
 	fastify.get('/', {
 		schema: {
 			description: 'List all reserved display names.',
 			tags: ['CMS', 'Reserved Display Names'],
-			response: { 200: listResponse, 500: errorResponse },
+			response: { 200: reservedNameListResponse, 500: errorResponse },
 		},
 		handler: async (request, reply) => {
 			try {
@@ -64,11 +45,11 @@ export async function reservedDisplayNameRoutes(fastify: FastifyInstance) {
 		schema: {
 			description: 'Add a reserved display name.',
 			tags: ['CMS', 'Reserved Display Names'],
-			body: createRequest,
+			body: createReservedNameRequest,
 			response: { 201: reservedNameRow, 409: errorResponse, 500: errorResponse },
 		},
 		preHandler: requireCanEditUsers,
-		handler: async (request: FastifyRequest<{ Body: z.infer<typeof createRequest> }>, reply) => {
+		handler: async (request: FastifyRequest<{ Body: z.infer<typeof createReservedNameRequest> }>, reply) => {
 			try {
 				const stored = normalizeDisplayName(request.body.value).toLowerCase();
 				const storedCheckKey = reservedCheckKey(stored);
@@ -119,7 +100,7 @@ export async function reservedDisplayNameRoutes(fastify: FastifyInstance) {
 		schema: {
 			description: 'Remove a reserved display name by id.',
 			tags: ['CMS', 'Reserved Display Names'],
-			params: idParam,
+			params: reservedNameIdParam,
 			response: { 204: z.void(), 404: errorResponse, 500: errorResponse },
 		},
 		preHandler: requireCanEditUsers,

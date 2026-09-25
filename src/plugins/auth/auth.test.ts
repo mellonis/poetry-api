@@ -4,6 +4,7 @@ import { serializerCompiler, validatorCompiler } from 'fastify-type-provider-zod
 import type { MySQLPromisePool } from '@fastify/mysql';
 import { authPlugin } from './auth.js';
 import { authRoutesPlugin } from './authRoutes.js';
+import { generateVerificationKey } from './databaseHelpers.js';
 import bcrypt from 'bcryptjs';
 
 const mockNotifier = {
@@ -33,6 +34,23 @@ function createMockMysql(...responses: Record<string, unknown>[][]): MySQLPromis
 			})
 		),
 	} as unknown as MySQLPromisePool;
+}
+
+function createRecordingMysql(...responses: unknown[]) {
+	let callIndex = 0;
+	const calls: { sql: string; params: unknown[] }[] = [];
+	const pool = {
+		getConnection: vi.fn().mockImplementation(() =>
+			Promise.resolve({
+				query: vi.fn().mockImplementation((sql: string, params?: unknown[]) => {
+					calls.push({ sql, params: params ?? [] });
+					return Promise.resolve([responses[callIndex++] ?? []]);
+				}),
+				release: vi.fn(),
+			}),
+		),
+	} as unknown as MySQLPromisePool;
+	return { pool, calls };
 }
 
 function buildApp(mysql: MySQLPromisePool) {
@@ -154,6 +172,41 @@ describe('POST /auth/logout', () => {
 		});
 
 		expect(response.statusCode).toBe(204);
+	});
+});
+
+const resetRequestedUserRow = {
+	user_id: 1,
+	user_login: 'testuser',
+	user_rights: 26, // canVote (8) + canComment (16) + passwordResetRequested (2)
+	group_id: 3,
+	group_rights: 0,
+	token_version: 0,
+};
+
+describe('POST /auth/reset-password', () => {
+	it('purges personal access tokens on password reset', async () => {
+		const key = generateVerificationKey();
+		const { pool, calls } = createRecordingMysql(
+			[resetRequestedUserRow], // findUserByKey
+			[], // resetPassword
+			[], // deleteAllUserRefreshTokens
+			[], // deleteAllUserPersonalAccessTokens
+			[], // bumpTokenVersion
+		);
+		const app = buildApp(pool);
+
+		const response = await app.inject({
+			method: 'POST',
+			url: '/auth/reset-password',
+			payload: { key, newPassword: 'newpass123' },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const sqls = calls.map((c) => c.sql);
+		expect(sqls.some((s) => /DELETE FROM auth_refresh_token WHERE r_user_id/.test(s))).toBe(true);
+		expect(sqls.some((s) => /DELETE FROM auth_personal_access_token WHERE r_user_id/.test(s))).toBe(true);
+		expect(sqls.some((s) => /UPDATE auth_user SET token_version = token_version \+ 1 WHERE id/.test(s))).toBe(true);
 	});
 });
 

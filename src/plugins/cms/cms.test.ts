@@ -68,6 +68,7 @@ async function buildApp(mysql: MySQLPromisePool) {
 	app.setValidatorCompiler(validatorCompiler);
 	app.setSerializerCompiler(serializerCompiler);
 	app.decorate('mysql', mysql);
+	app.decorate('revalidateContent', vi.fn());
 	app.decorate('authNotifier', mockNotifier);
 	app.decorate('resolveOrigin', () => 'https://test.example.com');
 	app.register(authPlugin);
@@ -621,6 +622,24 @@ describe('PUT /cms/things/:thingId — editingDone semantics', () => {
 		const update = calls.find((c) => c.sql.includes('UPDATE thing SET'));
 		expect(update!.params[9]).toBe(0);
 	});
+
+	it('PUT /cms/things/:thingId fires cache revalidation', async () => {
+		// same mocked rows as the successful update test above
+		const { pool } = createRecordingMysql(
+			[thingRow(null, '2026-07-01T10:00:00')], [],
+			[],
+			[thingRow('2026-07-05T12:00:00', '2026-07-05T12:00:00')], [],
+		);
+		const app = await buildApp(pool);
+		const token = await getEditorToken();
+		const res = await app.inject({
+			method: 'PUT', url: '/cms/things/7',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { title: 'x' },
+		});
+		expect(res.statusCode).toBe(200);
+		expect(app.revalidateContent).toHaveBeenCalledTimes(1);
+	});
 });
 
 // --- User management ---
@@ -807,14 +826,15 @@ describe('PUT /cms/users/:userId', () => {
 	});
 
 	it('updates another user', async () => {
-		// Responses: getUserById, getGroups, updateCmsUser, bumpTokenVersion, deleteRefreshTokens, getUserById (refetch)
+		// Responses: getUserById, getGroups, updateCmsUser, bumpTokenVersion, deleteRefreshTokens, deletePersonalAccessTokens, getUserById (refetch)
 		const updatedRow = { ...userRow, groupId: 2, groupTitle: 'editors' };
 		const app = await buildApp(createMockMysql(
 			[userRow],
 			groupRows,
 			[], // update
 			[], // bump token
-			[], // delete tokens
+			[], // delete refresh tokens
+			[], // delete personal access tokens
 			[updatedRow],
 		));
 		const token = await getAdminToken();
@@ -827,6 +847,34 @@ describe('PUT /cms/users/:userId', () => {
 		});
 
 		expect(response.statusCode).toBe(200);
+	});
+
+	it('PUT /cms/users/:userId purges refresh tokens and personal access tokens', async () => {
+		// Responses: getUserById, getGroups, updateCmsUser, bumpTokenVersion, deleteRefreshTokens, deletePersonalAccessTokens, getUserById (refetch)
+		const updatedRow = { ...userRow, groupId: 2, groupTitle: 'editors' };
+		const { pool, calls } = createRecordingMysql(
+			[userRow],
+			groupRows,
+			[], // update
+			[], // bump token
+			[], // delete refresh tokens
+			[], // delete personal access tokens
+			[updatedRow], // refetch
+		);
+		const app = await buildApp(pool);
+		const token = await getAdminToken();
+
+		const response = await app.inject({
+			method: 'PUT',
+			url: '/cms/users/5',
+			headers: { authorization: `Bearer ${token}` },
+			payload: { groupId: 2 },
+		});
+
+		expect(response.statusCode).toBe(200);
+		const sqls = calls.map((c) => c.sql);
+		expect(sqls.some((s) => /token_version = token_version \+ 1/.test(s))).toBe(true);
+		expect(sqls.some((s) => /DELETE FROM auth_personal_access_token WHERE r_user_id/.test(s))).toBe(true);
 	});
 });
 
@@ -1256,5 +1304,85 @@ describe('CMS thing review persistence', () => {
 
 		expect(response.statusCode).toBe(204);
 		expect(calls.some((c) => c.sql.includes('DELETE FROM thing_review'))).toBe(true);
+	});
+});
+
+// Every content-mutating CMS route must clear the site caches. One successful
+// request per route with the minimal positional mocks (in handler query order).
+describe('CMS content mutations fire cache revalidation', () => {
+	const cmsThing = { ...thingRow, editingDoneAt: null, lastModified: null, review: null };
+	const createThingPayload = { title: null, text: 'Body', categoryId: 1, notes: [], finishDate: '1990-05-12' };
+
+	const cases: {
+		name: string;
+		method: 'POST' | 'PUT' | 'DELETE';
+		url: string;
+		payload?: unknown;
+		responses: Record<string, unknown>[][];
+		status: number;
+	}[] = [
+		{
+			name: 'POST /cms/things', method: 'POST', url: '/cms/things', payload: createThingPayload, status: 201,
+			responses: [[{ insertId: 42 }], [cmsThing], []], // INSERT thing; refetch + notes
+		},
+		{
+			name: 'PUT /cms/things/:thingId', method: 'PUT', url: '/cms/things/42', payload: { title: 'x' }, status: 200,
+			responses: [[cmsThing], [], [], [cmsThing], []], // current + notes; UPDATE thing; refetch + notes
+		},
+		{
+			name: 'DELETE /cms/things/:thingId', method: 'DELETE', url: '/cms/things/42', status: 204,
+			responses: [[cmsThing], [], [{ cnt: 0 }], [], [], [], [], []], // current + notes; sections count; txn: notes, seo, info, review, thing
+		},
+		{
+			name: 'POST /cms/sections', method: 'POST', url: '/cms/sections', payload: { identifier: 'newsec', title: 'New Section', typeId: 1 }, status: 201,
+			responses: [[{ maxOrder: 5 }], [{ insertId: 99 }], [{ ...sectionRow, id: 99 }]], // max order; INSERT; refetch
+		},
+		{
+			name: 'PUT /cms/sections/:sectionId', method: 'PUT', url: '/cms/sections/10', payload: { title: 'Renamed' }, status: 200,
+			responses: [[sectionRow], [], [sectionRow]], // current; UPDATE section; refetch
+		},
+		{
+			name: 'DELETE /cms/sections/:sectionId', method: 'DELETE', url: '/cms/sections/10', status: 204,
+			responses: [[sectionRow], [], [], []], // current; incoming redirects; txn: identifiers, section
+		},
+		{
+			name: 'PUT /cms/sections/reorder', method: 'PUT', url: '/cms/sections/reorder', payload: [10, 11], status: 200,
+			responses: [[], [], [sectionRow]], // two order updates; list refetch
+		},
+		{
+			name: 'POST /cms/sections/:sectionId/things', method: 'POST', url: '/cms/sections/10/things', payload: { thingId: 42 }, status: 201,
+			responses: [[sectionRow], [{ id: 42 }], [{ maxPosition: 3 }], [], []], // section; thing exists; max position; INSERT; refetch
+		},
+		{
+			name: 'DELETE /cms/sections/:sectionId/things/:thingId', method: 'DELETE', url: '/cms/sections/10/things/42', status: 204,
+			responses: [[]], // DELETE placement
+		},
+		{
+			name: 'PUT /cms/sections/:sectionId/things/reorder', method: 'PUT', url: '/cms/sections/10/things/reorder', payload: [2, 1], status: 200,
+			responses: [[sectionRow], [{ thingId: 1 }, { thingId: 2 }], [], [], [], [], []], // section; current ids; 2×2 position updates; refetch
+		},
+		{
+			name: 'PUT /cms/author', method: 'PUT', url: '/cms/author', payload: { text: 'Био', date: '2026-01-01' }, status: 200,
+			responses: [[], [{ text: 'Био', date: '2026-01-01' }]], // UPDATE news; refetch
+		},
+	];
+
+	it('covers all 11 content-mutating routes', () => {
+		expect(cases).toHaveLength(11);
+	});
+
+	it.each(cases)('$name', async ({ method, url, payload, responses, status }) => {
+		const { pool } = createRecordingMysql(...responses);
+		const app = await buildApp(pool);
+		const token = await getEditorToken();
+
+		const response = await app.inject({
+			method, url,
+			headers: { authorization: `Bearer ${token}` },
+			...(payload !== undefined ? { payload: payload as Record<string, unknown> } : {}),
+		});
+
+		expect(response.statusCode, response.body).toBe(status);
+		expect(app.revalidateContent).toHaveBeenCalledTimes(1);
 	});
 });
